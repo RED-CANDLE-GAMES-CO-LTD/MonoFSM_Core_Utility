@@ -1,0 +1,18 @@
+{
+  "name": "com.monofsm.utility",
+  "version": "0.1.0",
+  "displayName": "MonoFSM Utility",
+  "description": "Utility package for MonoFSM and dependency installer",
+  "unity": "6001.1",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "keywords": [
+    "dependency installer","package manager","utility","mono"
+  ],
+  "samples": [],
+  "author": {
+    "name": "Red Candle Games",
+    "email": "jerryee@redcandlegames.com"
+  }
+}

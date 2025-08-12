@@ -1,0 +1,18 @@
+{
+    "name": "MonoFSM.Utility.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:6f5b918c226e046dd9b3fe0907198fda"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
