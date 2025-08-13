@@ -596,7 +596,7 @@ namespace MonoFSM.Core
         {
             var dependencies = new Dictionary<string, string>();
 
-            var depsObject = packageJson["dependencies"] as JObject;
+            var depsObject = packageJson["gitDependencies"] as JObject;
             if (depsObject != null)
             {
                 foreach (var dep in depsObject)
@@ -780,7 +780,7 @@ namespace MonoFSM.Core
             {
                 var manifestText = File.ReadAllText(manifestPath);
                 var manifestJson = JObject.Parse(manifestText);
-                var dependencies = manifestJson["dependencies"] as JObject;
+                var dependencies = manifestJson["gitDependencies"] as JObject;
 
                 s_manifestCache = new Dictionary<string, string>();
                 if (dependencies != null)
@@ -861,10 +861,10 @@ namespace MonoFSM.Core
                 var packageJson = JObject.Parse(
                     File.ReadAllText(analysisResult.targetPackageJsonPath)
                 );
-                var dependencies = packageJson["dependencies"] as JObject;
+                var dependencies = packageJson["gitDependencies"] as JObject;
                 if (dependencies == null)
                 {
-                    packageJson["dependencies"] = dependencies = new JObject();
+                    packageJson["gitDependencies"] = dependencies = new JObject();
                 }
 
                 var addedCount = 0;
@@ -941,10 +941,10 @@ namespace MonoFSM.Core
                 var packageJson = JObject.Parse(
                     File.ReadAllText(analysisResult.targetPackageJsonPath)
                 );
-                var dependencies = packageJson["dependencies"] as JObject;
+                var dependencies = packageJson["gitDependencies"] as JObject;
                 if (dependencies == null)
                 {
-                    packageJson["dependencies"] = dependencies = new JObject();
+                    packageJson["gitDependencies"] = dependencies = new JObject();
                 }
 
                 // 只添加指定的單一 package
