@@ -738,7 +738,7 @@ namespace MonoFSM.Core
         /// <summary>
         /// 檢查是否為 Git URL
         /// </summary>
-        private static bool IsGitUrl(string url)
+        public static bool IsGitUrl(string url)
         {
             if (string.IsNullOrEmpty(url))
                 return false;

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using MonoFSM.Core;
 using UnityEditor;
 using UnityEngine;
@@ -58,6 +57,21 @@ namespace MonoFSM.Utility.Editor
             if (!string.IsNullOrEmpty(selectedPackageJsonPath))
             {
                 GUILayout.Label($"路徑: {selectedPackageJsonPath}", EditorStyles.miniLabel);
+
+                // // 顯示 package.json 檔案的 Object field
+                // if (File.Exists(selectedPackageJsonPath))
+                // {
+                //     // 將絕對路徑轉換為相對於專案的路徑
+                //     var projectPath = Application.dataPath.Replace("/Assets", "");
+                //     var relativePath = selectedPackageJsonPath.Replace(projectPath + "/", "");
+                //
+                //     var packageJsonAsset = AssetDatabase.LoadAssetAtPath<TextAsset>(relativePath);
+                //
+                //     GUILayout.BeginHorizontal();
+                //     GUILayout.Label("Package.json:", GUILayout.Width(100));
+                //     EditorGUILayout.ObjectField(packageJsonAsset, typeof(TextAsset), false);
+                //     GUILayout.EndHorizontal();
+                // }
             }
 
             GUILayout.EndVertical();

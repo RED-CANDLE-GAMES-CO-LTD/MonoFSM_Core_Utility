@@ -127,9 +127,15 @@ namespace MonoFSM.Utility.Editor
             GitDependencyInstaller.DependencyCheckResult checkResult
         )
         {
-            var missingDeps = checkResult.gitDependencies.Where(d => !d.isInstalled).ToList();
+            var missingDeps = checkResult
+                .gitDependencies.Where(d =>
+                    !d.isInstalled && GitDependencyInstaller.ShouldInstallDependency(d)
+                )
+                .ToList();
+
             var totalCount = missingDeps.Count;
             var installedCount = 0;
+            var failedCount = 0;
 
             try
             {
@@ -144,35 +150,33 @@ namespace MonoFSM.Utility.Editor
                         progress
                     );
 
-                    Debug.Log($"[GitDependencyManager] 正在安裝: {dep.packageName}");
+                    // 使用共用的核心安裝方法
+                    bool installSuccess = false;
+                    string errorMessage = null;
 
-                    var addRequest = UnityEditor.PackageManager.Client.Add(dep.gitUrl);
-                    while (!addRequest.IsCompleted)
+                    GitDependencyInstaller.InstallSingleDependencyCore(
+                        dep,
+                        (success, packageName, error) =>
+                        {
+                            installSuccess = success;
+                            errorMessage = error;
+                        },
+                        showProgress: true,
+                        "安裝 Git Dependencies"
+                    );
+
+                    if (installSuccess)
                     {
-                        System.Threading.Thread.Sleep(100);
-                        if (
-                            EditorUtility.DisplayCancelableProgressBar(
-                                "安裝 Git Dependencies",
-                                $"正在安裝: {dep.packageName}...",
-                                progress
-                            )
-                        )
+                        installedCount++;
+                    }
+                    else
+                    {
+                        failedCount++;
+                        if (errorMessage == "用戶取消安裝")
                         {
                             Debug.Log("[GitDependencyManager] 用戶取消了安裝流程");
                             break;
                         }
-                    }
-
-                    if (addRequest.Status == UnityEditor.PackageManager.StatusCode.Success)
-                    {
-                        installedCount++;
-                        Debug.Log($"[GitDependencyManager] 成功安裝: {dep.packageName}");
-                    }
-                    else
-                    {
-                        Debug.LogError(
-                            $"[GitDependencyManager] 安裝失敗: {dep.packageName} - {addRequest.Error?.message}"
-                        );
                     }
                 }
             }

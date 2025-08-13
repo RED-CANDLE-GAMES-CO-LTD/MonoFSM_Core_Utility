@@ -18,6 +18,7 @@ namespace MonoFSM.Utility.Editor
         private bool showInstalledDependencies = true;
         private bool showMissingDependencies = true;
         private string searchFilter = "";
+        private string currentPackageJsonPath = "";
 
         // GUI Styles
         private GUIStyle headerStyle;
@@ -27,6 +28,9 @@ namespace MonoFSM.Utility.Editor
 
         public void DrawGUI(string selectedPackageJsonPath)
         {
+            // 更新當前路徑
+            currentPackageJsonPath = selectedPackageJsonPath;
+
             InitializeStyles();
 
             DrawHeader();
@@ -345,50 +349,52 @@ namespace MonoFSM.Utility.Editor
 
         private void InstallSingleDependency(GitDependencyInstaller.GitDependencyInfo dependency)
         {
-            var message = $"確定要安裝 '{dependency.packageName}' 嗎？\n\nURL: {dependency.gitUrl}";
-
-            if (EditorUtility.DisplayDialog("確認安裝", message, "確定", "取消"))
+            // 使用共用的安裝判定邏輯
+            if (!GitDependencyInstaller.ShouldInstallDependency(dependency))
             {
-                Debug.Log($"[GitDependenciesTab] 正在安裝: {dependency.packageName}");
-
-                var addRequest = UnityEditor.PackageManager.Client.Add(dependency.gitUrl);
-
-                // 簡單的等待處理
-                EditorApplication.delayCall += () => WaitForInstallation(addRequest, dependency);
-            }
-        }
-
-        private void WaitForInstallation(
-            UnityEditor.PackageManager.Requests.AddRequest request,
-            GitDependencyInstaller.GitDependencyInfo dependency
-        )
-        {
-            if (!request.IsCompleted)
-            {
-                EditorApplication.delayCall += () => WaitForInstallation(request, dependency);
                 return;
             }
 
-            if (request.Status == UnityEditor.PackageManager.StatusCode.Success)
+            var isGit = GitDependencyInstaller.IsGitUrl(dependency.gitUrl);
+            var message = $"確定要安裝 '{dependency.packageName}' 嗎？\n\nURL: {dependency.gitUrl}";
+            if (!isGit)
+                message = $"確定要安裝 \n{dependency.packageName}@{dependency.installedVersion}";
+
+            if (EditorUtility.DisplayDialog("確認安裝", message, "確定", "取消"))
             {
-                Debug.Log($"[GitDependenciesTab] 成功安裝: {dependency.packageName}");
-                EditorUtility.DisplayDialog(
-                    "安裝成功",
-                    $"'{dependency.packageName}' 已成功安裝！",
-                    "確定"
+                // 使用共用的核心安裝方法
+                GitDependencyInstaller.InstallSingleDependencyCore(
+                    dependency,
+                    OnSingleInstallComplete,
+                    showProgress: false
                 );
+            }
+        }
+
+        /// <summary>
+        /// 單個安裝完成的回調方法
+        /// </summary>
+        private void OnSingleInstallComplete(
+            bool success,
+            string packageName,
+            string errorMessage = null
+        )
+        {
+            if (success)
+            {
+                EditorUtility.DisplayDialog("安裝成功", $"'{packageName}' 已成功安裝！", "確定");
             }
             else
             {
-                Debug.LogError(
-                    $"[GitDependenciesTab] 安裝失敗: {dependency.packageName} - {request.Error?.message}"
-                );
                 EditorUtility.DisplayDialog(
                     "安裝失敗",
-                    $"'{dependency.packageName}' 安裝失敗。\n\n請查看 Console 獲取詳細錯誤訊息。",
+                    $"'{packageName}' 安裝失敗。\n\n錯誤訊息: {errorMessage ?? "請查看 Console 獲取詳細訊息。"}",
                     "確定"
                 );
             }
+
+            // 重新整理依賴列表
+            RefreshDependencies(currentPackageJsonPath);
         }
     }
 }

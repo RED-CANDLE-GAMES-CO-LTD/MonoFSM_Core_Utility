@@ -14,7 +14,7 @@ namespace MonoFSM.Core
     /// Git Dependency 安裝器 - 檢查和安裝 package.json 中的 git dependencies
     /// 使用 #if UNITY_EDITOR 模式，可在 Runtime assembly 中提供 Editor 功能
     /// </summary>
-    public static class GitDependencyInstaller
+    public static partial class GitDependencyInstaller
     {
         /// <summary>
         /// Git 依賴資訊
@@ -130,30 +130,30 @@ namespace MonoFSM.Core
                     var packageUrl = dependency.Value.ToString();
 
                     // 檢查是否為 git URL
-                    if (IsGitUrl(packageUrl))
+                    // if (IsGitUrl(packageUrl))
+                    // {
+                    Debug.Log(
+                        $"[GitDependencyInstaller] 檢查Git依賴: {packageName} - URL: {packageUrl}"
+                    );
+
+                    var gitInfo = new GitDependencyInfo(packageName, packageUrl);
+
+                    // 檢查是否已安裝
+                    if (installedPackages.ContainsKey(packageName))
                     {
-                        Debug.Log(
-                            $"[GitDependencyInstaller] 檢查Git依賴: {packageName} - URL: {packageUrl}"
-                        );
-
-                        var gitInfo = new GitDependencyInfo(packageName, packageUrl);
-
-                        // 檢查是否已安裝
-                        if (installedPackages.ContainsKey(packageName))
-                        {
-                            var installedPackage = installedPackages[packageName];
-                            gitInfo.isInstalled = true;
-                            gitInfo.installedVersion = installedPackage.version;
-                            gitInfo.targetVersion = ExtractVersionFromGitUrl(packageUrl);
-                            result.installedDependencies.Add(packageName);
-                        }
-                        else
-                        {
-                            result.missingDependencies.Add(packageName);
-                        }
-
-                        result.gitDependencies.Add(gitInfo);
+                        var installedPackage = installedPackages[packageName];
+                        gitInfo.isInstalled = true;
+                        gitInfo.installedVersion = installedPackage.version;
+                        gitInfo.targetVersion = ExtractVersionFromGitUrl(packageUrl);
+                        result.installedDependencies.Add(packageName);
                     }
+                    else
+                    {
+                        result.missingDependencies.Add(packageName);
+                    }
+
+                    result.gitDependencies.Add(gitInfo);
+                    // }
                 }
 
                 result.allDependenciesInstalled = result.missingDependencies.Count == 0;
@@ -191,50 +191,39 @@ namespace MonoFSM.Core
         /// </summary>
         public static void InstallMissingGitDependencies(DependencyCheckResult checkResult)
         {
-            // 清除快取以確保取得最新狀態
-            // ClearCache();
-            // var checkResult = CheckGitDependencies();
-            // if (checkResult.missingDependencies.Count == 0)
-            // {
-            //     Debug.Log("[GitDependencyInstaller] 所有 git dependencies 已安裝完成");
-            //     return;
-            // }
+            // 使用共用的安裝判定邏輯過濾需要安裝的依賴
+            var dependenciesToInstall = checkResult
+                .gitDependencies.Where(d => !d.isInstalled && ShouldInstallDependency(d))
+                .ToList();
+
+            if (dependenciesToInstall.Count == 0)
+            {
+                Debug.Log("[GitDependencyInstaller] 所有 git dependencies 已安裝完成或無需安裝");
+                return;
+            }
 
             Debug.Log(
-                $"[GitDependencyInstaller] 開始安裝 {checkResult.missingDependencies.Count} 個缺失的 git dependencies"
+                $"[GitDependencyInstaller] 開始安裝 {dependenciesToInstall.Count} 個缺失的 git dependencies"
             );
 
             var installCount = 0;
-            foreach (var gitDep in checkResult.gitDependencies)
+            var failedCount = 0;
+
+            foreach (var gitDep in dependenciesToInstall)
             {
-                if (!gitDep.isInstalled)
+                // 使用完全共用的同步安裝方法
+                if (InstallSingleDependencySync(gitDep))
                 {
-                    Debug.Log(
-                        $"[GitDependencyInstaller] 正在安裝: {gitDep.packageName} from {gitDep.gitUrl}"
-                    );
-
-                    var addRequest = Client.Add(gitDep.gitUrl);
-                    while (!addRequest.IsCompleted)
-                    {
-                        System.Threading.Thread.Sleep(50);
-                    }
-
-                    if (addRequest.Status == StatusCode.Success)
-                    {
-                        Debug.Log($"[GitDependencyInstaller] 成功安裝: {gitDep.packageName}");
-                        installCount++;
-                    }
-                    else
-                    {
-                        Debug.LogError(
-                            $"[GitDependencyInstaller] 安裝失敗: {gitDep.packageName} - {addRequest.Error?.message}"
-                        );
-                    }
+                    installCount++;
+                }
+                else
+                {
+                    failedCount++;
                 }
             }
 
             Debug.Log(
-                $"[GitDependencyInstaller] 安裝完成 - 成功: {installCount}/{checkResult.missingDependencies.Count}"
+                $"[GitDependencyInstaller] 安裝完成 - 成功: {installCount}, 失敗: {failedCount}, 總計: {dependenciesToInstall.Count}"
             );
 
             // 清除快取並重新整理 AssetDatabase
@@ -306,7 +295,7 @@ namespace MonoFSM.Core
         /// <summary>
         /// 判斷是否為 Git URL
         /// </summary>
-        private static bool IsGitUrl(string url)
+        public static bool IsGitUrl(string url)
         {
             if (string.IsNullOrEmpty(url))
                 return false;
