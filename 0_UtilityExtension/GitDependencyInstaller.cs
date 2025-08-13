@@ -93,7 +93,7 @@ namespace MonoFSM.Core
 
                 var packageText = File.ReadAllText(packageJsonPath);
                 var packageJson = JObject.Parse(packageText);
-                var dependencies = packageJson["dependencies"] as JObject;
+                var dependencies = packageJson["gitDependencies"] as JObject;
 
                 if (dependencies == null)
                 {
@@ -261,10 +261,10 @@ namespace MonoFSM.Core
                 var packageText = File.ReadAllText(packageJsonPath);
                 var packageJson = JObject.Parse(packageText);
 
-                var dependencies = packageJson["dependencies"] as JObject;
+                var dependencies = packageJson["gitDependencies"] as JObject;
                 if (dependencies == null)
                 {
-                    packageJson["dependencies"] = dependencies = new JObject();
+                    packageJson["gitDependencies"] = dependencies = new JObject();
                 }
 
                 var addedCount = 0;
