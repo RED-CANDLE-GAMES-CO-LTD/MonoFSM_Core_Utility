@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -119,6 +120,9 @@ namespace MonoFSM.Core
                     }
                 }
 
+                // 檢查並同步 scopedRegistries
+                SyncScopedRegistriesToManifest(packageJson, packageJsonPath);
+
                 // 分析 git dependencies
                 foreach (var dependency in dependencies)
                 {
@@ -157,6 +161,15 @@ namespace MonoFSM.Core
                 Debug.Log(
                     $"[GitDependencyInstaller] 檢查完成 - 總計: {result.gitDependencies.Count}, 已安裝: {result.installedDependencies.Count}, 缺失: {result.missingDependencies.Count}"
                 );
+
+                // 如果有同步 scopedRegistries，提供額外的日誌
+                var packageScopedRegistries = packageJson["scopedRegistries"] as JArray;
+                if (packageScopedRegistries != null && packageScopedRegistries.Count > 0)
+                {
+                    Debug.Log(
+                        $"[GitDependencyInstaller] 已檢查並同步 {packageScopedRegistries.Count} 個 scopedRegistries 到主專案"
+                    );
+                }
             }
             catch (System.Exception ex)
             {
@@ -334,6 +347,142 @@ namespace MonoFSM.Core
         {
             s_lastCheckResult = null;
             s_isChecking = false;
+        }
+
+        /// <summary>
+        /// 同步 package.json 中的 scopedRegistries 到主專案的 manifest.json
+        /// </summary>
+        private static void SyncScopedRegistriesToManifest(
+            JObject packageJson,
+            string packageJsonPath
+        )
+        {
+            try
+            {
+                var scopedRegistries = packageJson["scopedRegistries"] as JArray;
+                if (scopedRegistries == null || scopedRegistries.Count == 0)
+                {
+                    Debug.Log(
+                        $"[GitDependencyInstaller] {Path.GetFileName(packageJsonPath)} 中沒有 scopedRegistries"
+                    );
+                    return;
+                }
+
+                var manifestPath = "Packages/manifest.json";
+                if (!File.Exists(manifestPath))
+                {
+                    Debug.LogError(
+                        $"[GitDependencyInstaller] 找不到主專案 manifest.json: {manifestPath}"
+                    );
+                    return;
+                }
+
+                var manifestJson = JObject.Parse(File.ReadAllText(manifestPath));
+                var manifestScopedRegistries = manifestJson["scopedRegistries"] as JArray;
+
+                if (manifestScopedRegistries == null)
+                {
+                    manifestJson["scopedRegistries"] = manifestScopedRegistries = new JArray();
+                }
+
+                bool hasChanges = false;
+                int addedCount = 0;
+
+                // 逐一檢查 package.json 中的 scopedRegistries
+                foreach (var packageRegistry in scopedRegistries)
+                {
+                    var packageRegObj = packageRegistry as JObject;
+                    if (packageRegObj == null)
+                        continue;
+
+                    var name = packageRegObj["name"]?.ToString();
+                    var url = packageRegObj["url"]?.ToString();
+                    var scopes = packageRegObj["scopes"] as JArray;
+
+                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(url) || scopes == null)
+                        continue;
+
+                    // 在 manifest.json 中尋找相同的 registry
+                    JObject existingRegistry = null;
+                    foreach (var manifestRegistry in manifestScopedRegistries)
+                    {
+                        var manifestRegObj = manifestRegistry as JObject;
+                        if (
+                            manifestRegObj != null
+                            && manifestRegObj["name"]?.ToString() == name
+                            && manifestRegObj["url"]?.ToString() == url
+                        )
+                        {
+                            existingRegistry = manifestRegObj;
+                            break;
+                        }
+                    }
+
+                    if (existingRegistry == null)
+                    {
+                        // 創建新的 registry
+                        var newRegistry = new JObject
+                        {
+                            ["name"] = name,
+                            ["url"] = url,
+                            ["scopes"] = new JArray(scopes),
+                        };
+                        manifestScopedRegistries.Add(newRegistry);
+                        hasChanges = true;
+                        addedCount++;
+                        Debug.Log(
+                            $"[GitDependencyInstaller] 已添加新的 scopedRegistry: {name} ({url})"
+                        );
+                    }
+                    else
+                    {
+                        // 檢查並合併 scopes
+                        var existingScopes = existingRegistry["scopes"] as JArray;
+                        if (existingScopes != null)
+                        {
+                            foreach (var scope in scopes)
+                            {
+                                var scopeStr = scope.ToString();
+                                if (!existingScopes.Any(s => s.ToString() == scopeStr))
+                                {
+                                    existingScopes.Add(scopeStr);
+                                    hasChanges = true;
+                                    Debug.Log(
+                                        $"[GitDependencyInstaller] 已將 scope '{scopeStr}' 添加到現有 registry: {name}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 如果有變更，寫回 manifest.json
+                if (hasChanges)
+                {
+                    File.WriteAllText(
+                        manifestPath,
+                        manifestJson.ToString(Newtonsoft.Json.Formatting.Indented)
+                    );
+                    Debug.Log(
+                        $"[GitDependencyInstaller] 已同步 {addedCount} 個 scopedRegistries 到主專案 manifest.json"
+                    );
+
+                    // 刷新 Package Manager
+                    AssetDatabase.Refresh();
+                }
+                else
+                {
+                    Debug.Log(
+                        "[GitDependencyInstaller] manifest.json 的 scopedRegistries 已是最新狀態"
+                    );
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError(
+                    $"[GitDependencyInstaller] 同步 scopedRegistries 時發生錯誤: {ex.Message}"
+                );
+            }
         }
 
 #else

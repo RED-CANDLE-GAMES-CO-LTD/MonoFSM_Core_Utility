@@ -260,7 +260,7 @@ namespace MonoFSM.Utility.Editor
             Action<AssemblyDependencyAnalyzer.ReferencedPackageInfo> onUpdateCallback
         )
         {
-            GUILayout.BeginVertical(GUILayout.Width(350));
+            GUILayout.BeginVertical(GUILayout.Width(450));
 
             if (!string.IsNullOrEmpty(missing.gitUrl) && missing.hasGitUrl)
             {
@@ -278,8 +278,12 @@ namespace MonoFSM.Utility.Editor
             }
             else
             {
-                // 需要輸入 Git URL
-                GUILayout.Label("請輸入 Git URL:", EditorStyles.miniLabel);
+                // 提供多種添加方式
+                GUILayout.Label("添加方式:", EditorStyles.miniLabel);
+
+                // Git URL 輸入方式
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Git URL:", GUILayout.Width(60));
 
                 if (!gitUrlInputs.ContainsKey(missing.packageName))
                 {
@@ -290,15 +294,151 @@ namespace MonoFSM.Utility.Editor
                     gitUrlInputs[missing.packageName]
                 );
 
-                // 添加按鈕，只有在有輸入時才啟用
+                // Git URL 添加按鈕
                 GUI.enabled = !string.IsNullOrWhiteSpace(gitUrlInputs[missing.packageName]);
-                if (GUILayout.Button("添加到 package.json", GUILayout.Height(20)))
+                if (GUILayout.Button("添加 Git", GUILayout.Width(60)))
                 {
                     missing.gitUrl = gitUrlInputs[missing.packageName];
                     missing.hasGitUrl = IsGitUrl(gitUrlInputs[missing.packageName]);
                     onUpdateCallback?.Invoke(missing);
                 }
                 GUI.enabled = true;
+                GUILayout.EndHorizontal();
+
+                // Registry Package 方式
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Registry:", GUILayout.Width(60));
+
+                // 版本號輸入 (可選)
+                var versionKey = missing.packageName + "_version";
+                if (!gitUrlInputs.ContainsKey(versionKey))
+                {
+                    gitUrlInputs[versionKey] = "";
+                }
+
+                gitUrlInputs[versionKey] = GUILayout.TextField(
+                    gitUrlInputs[versionKey],
+                    GUILayout.Width(80)
+                );
+                GUILayout.Label("(版本)", EditorStyles.miniLabel, GUILayout.Width(40));
+
+                // Registry 添加按鈕
+                if (GUILayout.Button("添加 Registry", GUILayout.Width(80)))
+                {
+                    var version = string.IsNullOrWhiteSpace(gitUrlInputs[versionKey])
+                        ? "latest"
+                        : gitUrlInputs[versionKey];
+                    missing.gitUrl = "registry:" + version; // 用特殊前綴標記Registry package
+                    missing.hasGitUrl = false; // 標記為非Git URL
+                    onUpdateCallback?.Invoke(missing);
+                }
+                GUILayout.EndHorizontal();
+
+                // Scoped Registry 方式 - 完整設定
+                GUILayout.Label("Scoped Registry 設定:", EditorStyles.miniLabel);
+
+                // 版本號輸入
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("版本:", GUILayout.Width(60));
+                var npmVersionKey = missing.packageName + "_npm_version";
+                if (!gitUrlInputs.ContainsKey(npmVersionKey))
+                {
+                    gitUrlInputs[npmVersionKey] = "";
+                }
+                gitUrlInputs[npmVersionKey] = GUILayout.TextField(
+                    gitUrlInputs[npmVersionKey],
+                    GUILayout.Width(100)
+                );
+                GUILayout.EndHorizontal();
+
+                // Registry Name 輸入
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Name:", GUILayout.Width(60));
+                var registryNameKey = missing.packageName + "_registry_name";
+                if (!gitUrlInputs.ContainsKey(registryNameKey))
+                {
+                    gitUrlInputs[registryNameKey] = "npm";
+                }
+                gitUrlInputs[registryNameKey] = GUILayout.TextField(
+                    gitUrlInputs[registryNameKey],
+                    GUILayout.Width(100)
+                );
+                GUILayout.EndHorizontal();
+
+                // Registry URL 輸入
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("URL:", GUILayout.Width(60));
+                var registryUrlKey = missing.packageName + "_registry_url";
+                if (!gitUrlInputs.ContainsKey(registryUrlKey))
+                {
+                    gitUrlInputs[registryUrlKey] = "https://registry.npmjs.org/";
+                }
+                gitUrlInputs[registryUrlKey] = GUILayout.TextField(
+                    gitUrlInputs[registryUrlKey],
+                    GUILayout.Width(250)
+                );
+                GUILayout.EndHorizontal();
+
+                // Scope 輸入 (自動提取但可編輯)
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Scope:", GUILayout.Width(60));
+                var scopeKey = missing.packageName + "_scope";
+                if (!gitUrlInputs.ContainsKey(scopeKey))
+                {
+                    gitUrlInputs[scopeKey] = ExtractScope(missing.packageName);
+                }
+                gitUrlInputs[scopeKey] = GUILayout.TextField(
+                    gitUrlInputs[scopeKey],
+                    GUILayout.Width(150)
+                );
+                GUILayout.EndHorizontal();
+
+                // 添加按鈕
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("添加 Scoped Registry", GUILayout.Width(140)))
+                {
+                    var version = string.IsNullOrWhiteSpace(gitUrlInputs[npmVersionKey])
+                        ? "latest"
+                        : gitUrlInputs[npmVersionKey];
+                    var registryName = gitUrlInputs[registryNameKey];
+                    var registryUrl = gitUrlInputs[registryUrlKey];
+                    var scope = gitUrlInputs[scopeKey];
+
+                    missing.gitUrl =
+                        $"scopedRegistry:{registryName}:{registryUrl}:{scope}:{version}";
+                    missing.hasGitUrl = false;
+                    onUpdateCallback?.Invoke(missing);
+                }
+
+                // 或者直接填寫 JSON 的按鈕
+                if (GUILayout.Button("自定義 JSON", GUILayout.Width(100)))
+                {
+                    // 顯示 JSON 輸入對話框
+                    ShowScopedRegistryJsonDialog(missing, onUpdateCallback);
+                }
+                GUILayout.EndHorizontal();
+
+                // Asset Store / 手動安裝提示
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("其他:", GUILayout.Width(60));
+                if (GUILayout.Button("標記為手動安裝", GUILayout.Width(120)))
+                {
+                    missing.gitUrl = "manual"; // 特殊標記
+                    missing.hasGitUrl = false;
+                    onUpdateCallback?.Invoke(missing);
+                }
+                GUILayout.Label("(Asset Store等)", EditorStyles.miniLabel);
+                GUILayout.EndHorizontal();
+
+                // 說明文字
+                GUILayout.Space(3);
+                GUILayout.BeginVertical(EditorStyles.helpBox);
+                GUILayout.Label("💡 添加方式說明:", EditorStyles.miniLabel);
+                GUILayout.Label("• Git: 🟢 提供完整的Git URL", EditorStyles.miniLabel);
+                GUILayout.Label("• Registry: 🔵 從Unity registry安裝", EditorStyles.miniLabel);
+                GUILayout.Label("• NPM: 🟣 從npm安裝(需scopedRegistry)", EditorStyles.miniLabel);
+                GUILayout.Label("• 手動安裝: 🟠 Asset Store或本地package", EditorStyles.miniLabel);
+                GUILayout.EndVertical();
             }
 
             GUILayout.EndVertical();
@@ -306,20 +446,38 @@ namespace MonoFSM.Utility.Editor
 
         private string GetStatusIcon(AssemblyDependencyAnalyzer.ReferencedPackageInfo package)
         {
-            if (!string.IsNullOrEmpty(package.gitUrl) && package.hasGitUrl)
-                return "🟢";
+            if (!string.IsNullOrEmpty(package.gitUrl))
+            {
+                if (package.hasGitUrl)
+                    return "🟢"; // Git URL
+                if (package.gitUrl.StartsWith("registry:"))
+                    return "🔵"; // Registry package
+                if (package.gitUrl.StartsWith("scopedRegistry:"))
+                    return "🟣"; // NPM scoped registry
+                if (package.gitUrl == "manual")
+                    return "🟠"; // Manual install
+            }
             if (package.isLocalPackage)
-                return "🟡";
-            return "🔴";
+                return "🟡"; // Local package
+            return "🔴"; // Missing
         }
 
         private Color GetStatusColor(AssemblyDependencyAnalyzer.ReferencedPackageInfo package)
         {
-            if (!string.IsNullOrEmpty(package.gitUrl) && package.hasGitUrl)
-                return Color.green;
+            if (!string.IsNullOrEmpty(package.gitUrl))
+            {
+                if (package.hasGitUrl)
+                    return Color.green; // Git URL
+                if (package.gitUrl.StartsWith("registry:"))
+                    return Color.blue; // Registry package
+                if (package.gitUrl.StartsWith("scopedRegistry:"))
+                    return Color.magenta; // NPM scoped registry
+                if (package.gitUrl == "manual")
+                    return new Color(1f, 0.5f, 0f); // Orange for manual
+            }
             if (package.isLocalPackage)
-                return Color.yellow;
-            return Color.red;
+                return Color.yellow; // Local package
+            return Color.red; // Missing
         }
 
         private bool IsGitUrl(string url)
@@ -331,6 +489,84 @@ namespace MonoFSM.Utility.Editor
                 || url.StartsWith("git@github.com:")
                 || url.StartsWith("git://")
                 || url.Contains(".git");
+        }
+
+        /// <summary>
+        /// 從package名稱提取scope
+        /// 例如: com.kyrylokuzyk.primetween -> com.kyrylokuzyk
+        /// </summary>
+        private string ExtractScope(string packageName)
+        {
+            if (string.IsNullOrEmpty(packageName))
+                return "";
+
+            var parts = packageName.Split('.');
+            if (parts.Length >= 2)
+            {
+                return $"{parts[0]}.{parts[1]}";
+            }
+
+            return packageName; // 如果無法提取，返回原名稱
+        }
+
+        /// <summary>
+        /// 顯示自定義 scoped registry JSON 輸入對話框
+        /// </summary>
+        private void ShowScopedRegistryJsonDialog(
+            AssemblyDependencyAnalyzer.ReferencedPackageInfo missing,
+            Action<AssemblyDependencyAnalyzer.ReferencedPackageInfo> onUpdateCallback
+        )
+        {
+            var defaultJson =
+                $@"{{
+  ""version"": ""latest"",
+  ""scopedRegistry"": {{
+    ""name"": ""npm"",
+    ""url"": ""https://registry.npmjs.org/"",
+    ""scopes"": [""{ExtractScope(missing.packageName)}""]
+  }}
+}}";
+
+            var customJson = EditorInputDialog.Show(
+                "自定義 Scoped Registry JSON",
+                "請輸入完整的 scoped registry 設定:",
+                defaultJson,
+                "確定",
+                "取消"
+            );
+
+            if (!string.IsNullOrEmpty(customJson))
+            {
+                missing.gitUrl = "customScopedRegistry:" + customJson;
+                missing.hasGitUrl = false;
+                onUpdateCallback?.Invoke(missing);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 簡單的 Editor 輸入對話框
+    /// </summary>
+    public static class EditorInputDialog
+    {
+        public static string Show(
+            string title,
+            string message,
+            string defaultText,
+            string ok,
+            string cancel
+        )
+        {
+            // 使用 Unity 的輸入對話框
+            // 注意：這是簡化版本，實際可能需要創建自定義 EditorWindow
+            return EditorUtility.DisplayDialog(
+                title,
+                $"{message}\n\n預設值已複製到剪貼簿，請貼到外部編輯器修改後，再次調用此功能。",
+                ok,
+                cancel
+            )
+                ? defaultText
+                : null;
         }
     }
 }

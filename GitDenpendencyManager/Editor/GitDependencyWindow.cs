@@ -25,7 +25,7 @@ namespace MonoFSM.Utility.Editor
         private GUIStyle headerStyle;
         private bool stylesInitialized = false;
 
-        [MenuItem("Tools/MonoFSM/Dependencies/管理 Git Dependencies", false, 100)]
+        [MenuItem("Tools/MonoFSM/Dependencies/Git Dependencies Installer", false, 100)]
         public static GitDependencyWindow ShowWindow()
         {
             var window = GetWindow<GitDependencyWindow>("Git Dependencies");

@@ -329,10 +329,13 @@ namespace MonoFSM.Utility.Editor
 
             GUILayout.BeginVertical(EditorStyles.helpBox);
             GUILayout.Label("💡 Assembly Analysis 說明:", EditorStyles.boldLabel);
-            GUILayout.Label("• ✅ = 已安裝且在 package.json 中");
-            GUILayout.Label("• ❌ = 缺失依賴，需要安裝");
-            GUILayout.Label("• 🟡 = 本地 package（可選擇提供 Git URL）");
-            GUILayout.Label("• 📊 = 進度條顯示整體安裝狀態");
+            GUILayout.Label("• ✅ = 已在 package.json 中");
+            GUILayout.Label("• 🟢 = Git URL 依賴");
+            GUILayout.Label("• 🔵 = Registry 依賴");
+            GUILayout.Label("• 🟣 = NPM Scoped Registry (自動設定 manifest.json)");
+            GUILayout.Label("• 🟠 = 手動安裝依賴");
+            GUILayout.Label("• 🟡 = 本地 package");
+            GUILayout.Label("• ❌ = 缺失依賴，需要處理");
             GUILayout.EndVertical();
         }
 
@@ -378,7 +381,7 @@ namespace MonoFSM.Utility.Editor
             if (analysisResult == null)
                 return;
 
-            var gitUrl = !string.IsNullOrEmpty(package.gitUrl)
+            var dependencyValue = !string.IsNullOrEmpty(package.gitUrl)
                 ? package.gitUrl
                 : (
                     gitUrlInputs.ContainsKey(package.packageName)
@@ -386,22 +389,125 @@ namespace MonoFSM.Utility.Editor
                         : ""
                 );
 
-            if (string.IsNullOrWhiteSpace(gitUrl))
+            if (string.IsNullOrWhiteSpace(dependencyValue))
             {
-                EditorUtility.DisplayDialog("錯誤", "沒有提供 Git URL", "確定");
+                EditorUtility.DisplayDialog("錯誤", "沒有提供依賴資訊", "確定");
                 return;
+            }
+
+            // 處理不同類型的依賴
+            string finalValue;
+            string addType;
+
+            if (dependencyValue.StartsWith("registry:"))
+            {
+                var version = dependencyValue.Substring(9); // 移除 "registry:" 前綴
+                finalValue = string.IsNullOrEmpty(version) ? "latest" : version;
+                addType = "Registry Package";
+            }
+            else if (dependencyValue.StartsWith("scopedRegistry:"))
+            {
+                // 格式: scopedRegistry:registryName:registryUrl:scope:version
+                var parts = dependencyValue.Substring(15).Split(':'); // 移除 "scopedRegistry:" 前綴
+                if (parts.Length >= 4)
+                {
+                    var registryName = parts[0];
+                    var registryUrl = parts[1] + ":" + parts[2]; // 重組 URL (因為URL包含:)
+                    var scope = parts[3];
+                    var version = parts.Length > 4 ? parts[4] : "latest";
+
+                    finalValue = version;
+                    addType = "Scoped Registry";
+
+                    // 同時更新主專案的 manifest.json 和當前 package.json
+                    ManifestManager.AddScopedRegistry(
+                        package.packageName,
+                        registryName,
+                        registryUrl,
+                        scope,
+                        version,
+                        analysisResult.targetPackageJsonPath
+                    );
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog("錯誤", "Scoped Registry 格式不正確", "確定");
+                    return;
+                }
+            }
+            else if (dependencyValue.StartsWith("customScopedRegistry:"))
+            {
+                // 處理自定義 JSON 格式
+                var jsonContent = dependencyValue.Substring(21); // 移除 "customScopedRegistry:" 前綴
+
+                try
+                {
+                    var customData = Newtonsoft.Json.Linq.JObject.Parse(jsonContent);
+                    var version = customData["version"]?.ToString() ?? "latest";
+                    var scopedRegistry =
+                        customData["scopedRegistry"] as Newtonsoft.Json.Linq.JObject;
+
+                    if (scopedRegistry != null)
+                    {
+                        var registryName = scopedRegistry["name"]?.ToString() ?? "custom";
+                        var registryUrl = scopedRegistry["url"]?.ToString() ?? "";
+                        var scopes = scopedRegistry["scopes"] as Newtonsoft.Json.Linq.JArray;
+                        var scope = scopes?.FirstOrDefault()?.ToString() ?? "";
+
+                        finalValue = version;
+                        addType = "自定義 Scoped Registry";
+
+                        // 同時更新主專案的 manifest.json 和當前 package.json
+                        ManifestManager.AddScopedRegistry(
+                            package.packageName,
+                            registryName,
+                            registryUrl,
+                            scope,
+                            version,
+                            analysisResult.targetPackageJsonPath
+                        );
+                    }
+                    else
+                    {
+                        EditorUtility.DisplayDialog(
+                            "錯誤",
+                            "自定義 JSON 格式不正確，缺少 scopedRegistry 欄位",
+                            "確定"
+                        );
+                        return;
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    EditorUtility.DisplayDialog(
+                        "錯誤",
+                        $"解析自定義 JSON 失敗: {ex.Message}",
+                        "確定"
+                    );
+                    return;
+                }
+            }
+            else if (dependencyValue == "manual")
+            {
+                finalValue = "file:../LocalPackages/" + package.packageName; // 建議的本地路徑格式
+                addType = "手動安裝 (Local Path)";
+            }
+            else
+            {
+                finalValue = dependencyValue; // Git URL 或其他
+                addType = "Git URL";
             }
 
             // 使用單一 package 更新方法
             AssemblyDependencyAnalyzer.UpdateSinglePackageJsonDependency(
                 analysisResult,
                 package.packageName,
-                gitUrl
+                finalValue
             );
 
             EditorUtility.DisplayDialog(
                 "添加完成",
-                $"已將 '{package.packageName}' 添加到 package.json！",
+                $"已將 '{package.packageName}' 以 {addType} 方式添加到 package.json！\n\n值: {finalValue}",
                 "確定"
             );
 
