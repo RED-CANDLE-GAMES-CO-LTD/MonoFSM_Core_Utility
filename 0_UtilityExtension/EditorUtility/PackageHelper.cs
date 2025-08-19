@@ -1,10 +1,12 @@
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 #if UNITY_EDITOR
-using UnityEditor;
 using UnityEditor.PackageManager;
-using UnityEditor.PackageManager.Requests;
 using System.IO;
 #endif
 
@@ -29,7 +31,32 @@ namespace MonoFSM.Core
         }
 
         /// <summary>
-        /// 重新整理本地套件快取
+        /// 共用方法：取得所有套件清單
+        /// </summary>
+        private static List<PackageInfo> GetPackageList()
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var listRequest = Client.List(true, false);
+            stopwatch.Stop();
+            Debug.Log(
+                $"[PackageHelper] 取得套件清單耗時: {stopwatch.ElapsedMilliseconds} ms ({stopwatch.Elapsed.TotalSeconds:F2} 秒)");
+
+            // 等待請求完成
+            while (!listRequest.IsCompleted) Thread.Sleep(10);
+
+            if (listRequest.Status == StatusCode.Success)
+            {
+                return listRequest.Result.ToList();
+            }
+            else
+            {
+                Debug.LogWarning($"無法取得套件清單: {listRequest.Error?.message}");
+                return new List<PackageInfo>();
+            }
+        }
+
+        /// <summary>
+        ///     重新整理本地套件快取
         /// </summary>
         public static void RefreshLocalPackageCache()
         {
@@ -37,37 +64,22 @@ namespace MonoFSM.Core
 
             try
             {
-                var listRequest = Client.List(true, false);
+                var packages = GetPackageList();
 
-                // 等待請求完成
-                while (!listRequest.IsCompleted)
-                {
-                    System.Threading.Thread.Sleep(10);
-                }
-
-                if (listRequest.Status == StatusCode.Success)
-                {
-                    foreach (var package in listRequest.Result)
+                foreach (var package in packages)
+                    // 只取得本地套件 (source == PackageSource.Local)
+                    if (package.source == PackageSource.Local)
                     {
-                        // 只取得本地套件 (source == PackageSource.Local)
-                        if (package.source == PackageSource.Local)
+                        var packagePath = package.resolvedPath;
+                        if (!string.IsNullOrEmpty(packagePath) && Directory.Exists(packagePath))
                         {
-                            var packagePath = package.resolvedPath;
-                            if (!string.IsNullOrEmpty(packagePath) && Directory.Exists(packagePath))
-                            {
-                                // 轉換為相對路徑格式，如: Packages/com.jerryee.unity-mcp
-                                var relativePath = GetRelativePackagePath(package.name);
-                                s_cachedLocalPackages.Add(relativePath);
-                            }
+                            // 轉換為相對路徑格式，如: Packages/com.jerryee.unity-mcp
+                            var relativePath = GetRelativePackagePath(package.name);
+                            s_cachedLocalPackages.Add(relativePath);
                         }
                     }
-                }
-                else
-                {
-                    Debug.LogWarning($"無法取得套件清單: {listRequest.Error?.message}");
-                }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogWarning($"取得本地套件時發生錯誤: {ex.Message}");
 
@@ -110,7 +122,7 @@ namespace MonoFSM.Core
                     }
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogError($"讀取 manifest.json 時發生錯誤: {ex.Message}");
             }
@@ -177,19 +189,19 @@ namespace MonoFSM.Core
         }
 
         // 新增：所有 packages 的快取
-        private static List<UnityEditor.PackageManager.PackageInfo> s_cachedAllPackages;
+        private static List<PackageInfo> s_cachedAllPackages;
         private static bool s_allPackagesCacheValid = false;
 
         /// <summary>
         /// 取得所有已安裝的 packages（包含本地、git、registry 等）
         /// </summary>
-        public static List<UnityEditor.PackageManager.PackageInfo> GetAllPackages()
+        public static List<PackageInfo> GetAllPackages()
         {
             if (!s_allPackagesCacheValid || s_cachedAllPackages == null)
             {
                 RefreshAllPackageCache();
             }
-            return s_cachedAllPackages ?? new List<UnityEditor.PackageManager.PackageInfo>();
+            return s_cachedAllPackages ?? new List<PackageInfo>();
         }
 
         /// <summary>
@@ -197,31 +209,14 @@ namespace MonoFSM.Core
         /// </summary>
         public static void RefreshAllPackageCache()
         {
-            s_cachedAllPackages = new List<UnityEditor.PackageManager.PackageInfo>();
+            s_cachedAllPackages = new List<PackageInfo>();
 
             try
             {
-                var listRequest = Client.List(true, false);
-
-                // 等待請求完成
-                while (!listRequest.IsCompleted)
-                {
-                    System.Threading.Thread.Sleep(10);
-                }
-
-                if (listRequest.Status == StatusCode.Success)
-                {
-                    s_cachedAllPackages.AddRange(listRequest.Result);
-                    Debug.Log($"[PackageHelper] 快取了 {s_cachedAllPackages.Count} 個 packages");
-                }
-                else
-                {
-                    Debug.LogWarning(
-                        $"[PackageHelper] 無法取得所有套件清單: {listRequest.Error?.message}"
-                    );
-                }
+                var packages = GetPackageList();
+                s_cachedAllPackages.AddRange(packages);
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogError($"[PackageHelper] 取得所有套件時發生錯誤: {ex.Message}");
             }
@@ -232,7 +227,7 @@ namespace MonoFSM.Core
         /// <summary>
         /// 根據 package 名稱取得 PackageInfo
         /// </summary>
-        public static UnityEditor.PackageManager.PackageInfo GetPackageInfo(string packageName)
+        public static PackageInfo GetPackageInfo(string packageName)
         {
             var allPackages = GetAllPackages();
             return allPackages.FirstOrDefault(p => p.name == packageName);

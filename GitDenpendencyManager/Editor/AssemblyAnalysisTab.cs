@@ -123,6 +123,13 @@ namespace MonoFSM.Utility.Editor
 
             GUILayout.Space(10);
 
+            // 版本不匹配的 Dependencies
+            if (analysisResult.versionMismatchDependencies.Count > 0)
+            {
+                DrawVersionMismatchDependencies();
+                GUILayout.Space(10);
+            }
+
             // 缺失的 Dependencies
             if (analysisResult.missingDependencies.Count > 0)
             {
@@ -148,6 +155,14 @@ namespace MonoFSM.Utility.Editor
             GUILayout.Label($"Package: {analysisResult.targetPackageName}", EditorStyles.boldLabel);
             GUILayout.Label($"總計 Assemblies: {analysisResult.totalAssemblies}");
             GUILayout.Label($"有外部引用: {analysisResult.externalReferences}");
+            GUILayout.EndVertical();
+            
+            GUILayout.BeginVertical(GUILayout.Width(200));
+            GUILayout.Label($"缺失 Dependencies: {analysisResult.missingDependencies.Count}", 
+                analysisResult.missingDependencies.Count > 0 ? EditorStyles.boldLabel : EditorStyles.miniLabel);
+            GUILayout.Label($"已存在 Dependencies: {analysisResult.existingDependencies.Count}");
+            GUILayout.Label($"版本不匹配: {analysisResult.versionMismatchDependencies.Count}", 
+                analysisResult.versionMismatchDependencies.Count > 0 ? EditorStyles.boldLabel : EditorStyles.miniLabel);
             GUILayout.EndVertical();
 
             // GUILayout.BeginVertical();
@@ -177,6 +192,7 @@ namespace MonoFSM.Utility.Editor
             var allDependencies = new List<AssemblyDependencyAnalyzer.ReferencedPackageInfo>();
             allDependencies.AddRange(analysisResult.missingDependencies);
             allDependencies.AddRange(analysisResult.existingDependencies);
+            allDependencies.AddRange(analysisResult.versionMismatchDependencies);
 
             // 按狀態分類顯示外部引用
             GUILayout.Label("🔗 所有外部引用:", EditorStyles.boldLabel);
@@ -190,7 +206,13 @@ namespace MonoFSM.Utility.Editor
                 string statusText;
                 Color statusColor;
 
-                if (analysisResult.existingDependencies.Contains(dependency))
+                if (analysisResult.versionMismatchDependencies.Contains(dependency))
+                {
+                    statusIcon = "⚠️";
+                    statusText = $"版本不匹配 ({dependency.versionInPackageJson} → {dependency.versionInPackageManager})";
+                    statusColor = Color.yellow;
+                }
+                else if (analysisResult.existingDependencies.Contains(dependency))
                 {
                     statusIcon = "✅";
                     statusText = "已登記 Registered";
@@ -229,8 +251,19 @@ namespace MonoFSM.Utility.Editor
 
                 GUILayout.FlexibleSpace();
 
-                // Git URL 或動作按鈕
-                if (!string.IsNullOrEmpty(dependency.gitUrl))
+                // 動作按鈕
+                if (analysisResult.versionMismatchDependencies.Contains(dependency))
+                {
+                    // 版本不匹配：顯示更新版本按鈕
+                    var originalBgColor = GUI.backgroundColor;
+                    GUI.backgroundColor = Color.yellow;
+                    if (GUILayout.Button("🔄更新版本", GUILayout.Width(80)))
+                    {
+                        UpdatePackageVersion(dependency);
+                    }
+                    GUI.backgroundColor = originalBgColor;
+                }
+                else if (!string.IsNullOrEmpty(dependency.gitUrl))
                 {
                     if (GUILayout.Button("📋", GUILayout.Width(25)))
                     {
@@ -513,6 +546,94 @@ namespace MonoFSM.Utility.Editor
 
             // 重新分析以更新狀態
             AnalyzeSelectedPackage(analysisResult.targetPackageJsonPath);
+        }
+
+        private void DrawVersionMismatchDependencies()
+        {
+            GUILayout.Label("⚠️ 版本不匹配的 Dependencies:", EditorStyles.boldLabel);
+
+            GUILayout.BeginVertical(EditorStyles.helpBox);
+            GUILayout.Label("說明：這些依賴在 package.json 中記錄的版本與 Package Manager 中實際安裝的版本不一致", EditorStyles.helpBox);
+            GUILayout.Space(5);
+
+            foreach (var dependency in analysisResult.versionMismatchDependencies)
+            {
+                GUILayout.BeginHorizontal();
+                
+                // 警告圖示
+                var originalColor = GUI.color;
+                GUI.color = Color.yellow;
+                GUILayout.Label("⚠️", GUILayout.Width(25));
+                GUI.color = originalColor;
+
+                // Package 名稱
+                GUILayout.Label(dependency.packageName, EditorStyles.boldLabel, GUILayout.Width(200));
+
+                // 版本資訊
+                GUILayout.Label($"package.json: v{dependency.versionInPackageJson}", EditorStyles.miniLabel, GUILayout.Width(120));
+                GUILayout.Label("→", EditorStyles.miniLabel, GUILayout.Width(15));
+                GUILayout.Label($"已安裝: v{dependency.versionInPackageManager}", EditorStyles.miniLabel, GUILayout.Width(120));
+
+                GUILayout.FlexibleSpace();
+
+                // 更新按鈕
+                var originalBgColor = GUI.backgroundColor;
+                GUI.backgroundColor = Color.yellow;
+                if (GUILayout.Button("🔄更新到最新版本", GUILayout.Width(120)))
+                {
+                    UpdatePackageVersion(dependency);
+                }
+                GUI.backgroundColor = originalBgColor;
+
+                GUILayout.EndHorizontal();
+                GUILayout.Space(3);
+            }
+
+            GUILayout.EndVertical();
+        }
+
+        /// <summary>
+        /// 更新 package.json 中指定依賴的版本
+        /// </summary>
+        private void UpdatePackageVersion(AssemblyDependencyAnalyzer.ReferencedPackageInfo package)
+        {
+            if (analysisResult == null || package == null)
+                return;
+
+            var message = $"確定要更新 '{package.packageName}' 的版本嗎？\n\n" +
+                         $"package.json 中版本: v{package.versionInPackageJson}\n" +
+                         $"Package Manager 中版本: v{package.versionInPackageManager}\n\n" +
+                         "這會修改你的 local package.json 檔案。";
+
+            if (EditorUtility.DisplayDialog("確認版本更新", message, "確定", "取消"))
+            {
+                try
+                {
+                    // 使用 AssemblyDependencyAnalyzer 的方法來更新版本
+                    AssemblyDependencyAnalyzer.UpdatePackageVersionInJson(
+                        analysisResult.targetPackageJsonPath,
+                        package.packageName,
+                        package.versionInPackageManager
+                    );
+
+                    EditorUtility.DisplayDialog(
+                        "更新成功",
+                        $"已將 '{package.packageName}' 版本更新為 v{package.versionInPackageManager}！",
+                        "確定"
+                    );
+
+                    // 重新分析以更新狀態
+                    AnalyzeSelectedPackage(analysisResult.targetPackageJsonPath);
+                }
+                catch (System.Exception ex)
+                {
+                    EditorUtility.DisplayDialog(
+                        "更新失敗",
+                        $"更新版本時發生錯誤：\n{ex.Message}",
+                        "確定"
+                    );
+                }
+            }
         }
     }
 }

@@ -1,6 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using MonoFSM.Utility.Editor;
+using Newtonsoft.Json;
 using UnityEngine;
+using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.PackageManager;
@@ -19,7 +24,7 @@ namespace MonoFSM.Core
         /// <summary>
         /// Git 依賴資訊
         /// </summary>
-        [System.Serializable]
+        [Serializable]
         public class GitDependencyInfo
         {
             public string packageName;
@@ -36,12 +41,65 @@ namespace MonoFSM.Core
                 installedVersion = "";
                 targetVersion = "";
             }
+
+            /// <summary>
+            ///     檢查是否有可用的版本更新
+            /// </summary>
+            public bool HasVersionUpdate()
+            {
+                if (!isInstalled || string.IsNullOrEmpty(installedVersion) || string.IsNullOrEmpty(targetVersion))
+                    return false;
+
+                // 如果 targetVersion 是 "latest"，假設總是有更新
+                if (targetVersion == "latest")
+                    return true;
+
+                return CompareVersions(targetVersion, installedVersion) > 0;
+            }
+
+            /// <summary>
+            ///     比較兩個版本號，返回 1 表示 version1 > version2，0 表示相等，-1 表示 version1 < version2
+            /// </summary>
+            private static int CompareVersions(string version1, string version2)
+            {
+                if (string.IsNullOrEmpty(version1) || string.IsNullOrEmpty(version2))
+                    return 0;
+
+                // 移除可能的 "v" 前綴
+                version1 = version1.TrimStart('v');
+                version2 = version2.TrimStart('v');
+
+                try
+                {
+                    var v1Parts = version1.Split('.').Select(int.Parse).ToArray();
+                    var v2Parts = version2.Split('.').Select(int.Parse).ToArray();
+
+                    var maxLength = Math.Max(v1Parts.Length, v2Parts.Length);
+                    for (var i = 0; i < maxLength; i++)
+                    {
+                        var v1Value = i < v1Parts.Length ? v1Parts[i] : 0;
+                        var v2Value = i < v2Parts.Length ? v2Parts[i] : 0;
+
+                        if (v1Value > v2Value)
+                            return 1;
+                        if (v1Value < v2Value)
+                            return -1;
+                    }
+
+                    return 0;
+                }
+                catch
+                {
+                    // 如果版本號格式不標準，使用字串比較
+                    return string.Compare(version1, version2, StringComparison.Ordinal);
+                }
+            }
         }
 
         /// <summary>
         /// 依賴檢查結果
         /// </summary>
-        [System.Serializable]
+        [Serializable]
         public class DependencyCheckResult
         {
             public List<GitDependencyInfo> gitDependencies = new List<GitDependencyInfo>();
@@ -107,11 +165,11 @@ namespace MonoFSM.Core
                 var listRequest = Client.List(true, false);
                 while (!listRequest.IsCompleted)
                 {
-                    System.Threading.Thread.Sleep(10);
+                    Thread.Sleep(10);
                 }
 
                 var installedPackages =
-                    new Dictionary<string, UnityEditor.PackageManager.PackageInfo>();
+                    new Dictionary<string, PackageInfo>();
                 if (listRequest.Status == StatusCode.Success)
                 {
                     foreach (var package in listRequest.Result)
@@ -121,7 +179,7 @@ namespace MonoFSM.Core
                 }
 
                 // 檢查並同步 scopedRegistries
-                SyncScopedRegistriesToManifest(packageJson, packageJsonPath);
+                ManifestManager.SyncScopedRegistriesFromPackageJson(packageJson, packageJsonPath);
 
                 // 分析 git dependencies
                 foreach (var dependency in dependencies)
@@ -171,7 +229,7 @@ namespace MonoFSM.Core
                     );
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogError(
                     $"[GitDependencyInstaller] 檢查 git dependencies 時發生錯誤: {ex.Message}"
@@ -257,26 +315,59 @@ namespace MonoFSM.Core
                 }
 
                 var addedCount = 0;
+                var updatedCount = 0;
+                
                 foreach (var gitDep in gitDependencies)
                 {
-                    if (!dependencies.ContainsKey(gitDep.packageName))
+                    var newUrl = gitDep.gitUrl;
+                    
+                    // 如果 gitUrl 是空的，但有 targetVersion，嘗試更新現有 URL 的版本號
+                    if (string.IsNullOrEmpty(newUrl) && !string.IsNullOrEmpty(gitDep.targetVersion))
                     {
-                        dependencies[gitDep.packageName] = gitDep.gitUrl;
-                        addedCount++;
-                        Debug.Log(
-                            $"[GitDependencyInstaller] 已添加到 package.json: {gitDep.packageName}"
-                        );
+                        if (dependencies.ContainsKey(gitDep.packageName))
+                        {
+                            var existingUrl = dependencies[gitDep.packageName]?.ToString();
+                            if (!string.IsNullOrEmpty(existingUrl))
+                            {
+                                newUrl = UpdateGitUrlVersion(existingUrl, gitDep.targetVersion);
+                            }
+                        }
+                    }
+                    
+                    if (!string.IsNullOrEmpty(newUrl))
+                    {
+                        if (dependencies.ContainsKey(gitDep.packageName))
+                        {
+                            var oldUrl = dependencies[gitDep.packageName]?.ToString();
+                            if (oldUrl != newUrl)
+                            {
+                                dependencies[gitDep.packageName] = newUrl;
+                                updatedCount++;
+                                Debug.Log(
+                                    $"[GitDependencyInstaller] 已更新 package.json 中的 {gitDep.packageName}: {oldUrl} → {newUrl}"
+                                );
+                            }
+                        }
+                        else
+                        {
+                            dependencies[gitDep.packageName] = newUrl;
+                            addedCount++;
+                            Debug.Log(
+                                $"[GitDependencyInstaller] 已添加到 package.json: {gitDep.packageName} = {newUrl}"
+                            );
+                        }
                     }
                 }
 
-                if (addedCount > 0)
+                var totalChanges = addedCount + updatedCount;
+                if (totalChanges > 0)
                 {
                     File.WriteAllText(
                         packageJsonPath,
-                        packageJson.ToString(Newtonsoft.Json.Formatting.Indented)
+                        packageJson.ToString(Formatting.Indented)
                     );
                     Debug.Log(
-                        $"[GitDependencyInstaller] 已更新 package.json，添加了 {addedCount} 個 dependencies"
+                        $"[GitDependencyInstaller] 已更新 package.json，添加了 {addedCount} 個、更新了 {updatedCount} 個 dependencies"
                     );
                 }
                 else
@@ -284,7 +375,7 @@ namespace MonoFSM.Core
                     Debug.Log("[GitDependencyInstaller] package.json 已是最新狀態");
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogError(
                     $"[GitDependencyInstaller] 更新 package.json 時發生錯誤: {ex.Message}"
@@ -320,6 +411,22 @@ namespace MonoFSM.Core
 
             return "latest";
         }
+        
+        /// <summary>
+        /// 更新 Git URL 中的版本號
+        /// </summary>
+        private static string UpdateGitUrlVersion(string gitUrl, string newVersion)
+        {
+            if (string.IsNullOrEmpty(gitUrl) || string.IsNullOrEmpty(newVersion))
+                return gitUrl;
+                
+            // 移除現有的版本號（如果有的話）
+            var hashIndex = gitUrl.IndexOf('#');
+            var baseUrl = hashIndex > 0 ? gitUrl.Substring(0, hashIndex) : gitUrl;
+            
+            // 添加新版本號
+            return $"{baseUrl}#{newVersion}";
+        }
 
         /// <summary>
         /// 取得最後一次檢查結果
@@ -338,141 +445,6 @@ namespace MonoFSM.Core
             s_isChecking = false;
         }
 
-        /// <summary>
-        /// 同步 package.json 中的 scopedRegistries 到主專案的 manifest.json
-        /// </summary>
-        private static void SyncScopedRegistriesToManifest(
-            JObject packageJson,
-            string packageJsonPath
-        )
-        {
-            try
-            {
-                var scopedRegistries = packageJson["scopedRegistries"] as JArray;
-                if (scopedRegistries == null || scopedRegistries.Count == 0)
-                {
-                    Debug.Log(
-                        $"[GitDependencyInstaller] {Path.GetFileName(packageJsonPath)} 中沒有 scopedRegistries"
-                    );
-                    return;
-                }
-
-                var manifestPath = "Packages/manifest.json";
-                if (!File.Exists(manifestPath))
-                {
-                    Debug.LogError(
-                        $"[GitDependencyInstaller] 找不到主專案 manifest.json: {manifestPath}"
-                    );
-                    return;
-                }
-
-                var manifestJson = JObject.Parse(File.ReadAllText(manifestPath));
-                var manifestScopedRegistries = manifestJson["scopedRegistries"] as JArray;
-
-                if (manifestScopedRegistries == null)
-                {
-                    manifestJson["scopedRegistries"] = manifestScopedRegistries = new JArray();
-                }
-
-                bool hasChanges = false;
-                int addedCount = 0;
-
-                // 逐一檢查 package.json 中的 scopedRegistries
-                foreach (var packageRegistry in scopedRegistries)
-                {
-                    var packageRegObj = packageRegistry as JObject;
-                    if (packageRegObj == null)
-                        continue;
-
-                    var name = packageRegObj["name"]?.ToString();
-                    var url = packageRegObj["url"]?.ToString();
-                    var scopes = packageRegObj["scopes"] as JArray;
-
-                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(url) || scopes == null)
-                        continue;
-
-                    // 在 manifest.json 中尋找相同的 registry
-                    JObject existingRegistry = null;
-                    foreach (var manifestRegistry in manifestScopedRegistries)
-                    {
-                        var manifestRegObj = manifestRegistry as JObject;
-                        if (
-                            manifestRegObj != null
-                            && manifestRegObj["name"]?.ToString() == name
-                            && manifestRegObj["url"]?.ToString() == url
-                        )
-                        {
-                            existingRegistry = manifestRegObj;
-                            break;
-                        }
-                    }
-
-                    if (existingRegistry == null)
-                    {
-                        // 創建新的 registry
-                        var newRegistry = new JObject
-                        {
-                            ["name"] = name,
-                            ["url"] = url,
-                            ["scopes"] = new JArray(scopes),
-                        };
-                        manifestScopedRegistries.Add(newRegistry);
-                        hasChanges = true;
-                        addedCount++;
-                        Debug.Log(
-                            $"[GitDependencyInstaller] 已添加新的 scopedRegistry: {name} ({url})"
-                        );
-                    }
-                    else
-                    {
-                        // 檢查並合併 scopes
-                        var existingScopes = existingRegistry["scopes"] as JArray;
-                        if (existingScopes != null)
-                        {
-                            foreach (var scope in scopes)
-                            {
-                                var scopeStr = scope.ToString();
-                                if (!existingScopes.Any(s => s.ToString() == scopeStr))
-                                {
-                                    existingScopes.Add(scopeStr);
-                                    hasChanges = true;
-                                    Debug.Log(
-                                        $"[GitDependencyInstaller] 已將 scope '{scopeStr}' 添加到現有 registry: {name}"
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 如果有變更，寫回 manifest.json
-                if (hasChanges)
-                {
-                    File.WriteAllText(
-                        manifestPath,
-                        manifestJson.ToString(Newtonsoft.Json.Formatting.Indented)
-                    );
-                    Debug.Log(
-                        $"[GitDependencyInstaller] 已同步 {addedCount} 個 scopedRegistries 到主專案 manifest.json"
-                    );
-
-                    // 刷新 Package Manager
-                    AssetDatabase.Refresh();
-                }
-                else
-                {
-                    Debug.Log(
-                        "[GitDependencyInstaller] manifest.json 的 scopedRegistries 已是最新狀態"
-                    );
-                }
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError(
-                    $"[GitDependencyInstaller] 同步 scopedRegistries 時發生錯誤: {ex.Message}"
-                );
-            }
-        }
 
 #else
         // Runtime 版本 - 提供基本的狀態查詢

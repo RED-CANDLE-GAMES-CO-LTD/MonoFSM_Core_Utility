@@ -16,7 +16,8 @@ namespace MonoFSM.Utility.Editor
         {
             "安裝 Git Dependencies",
             "Assembly Analysis & Update Package.json",
-            "Convert Package to Submodule"
+            "Convert Package to Submodule",
+            "設定"
         };
 
         // 子組件
@@ -51,6 +52,14 @@ namespace MonoFSM.Utility.Editor
         private void OnEnable()
         {
             InitializeComponents();
+            // 啟動背景版本檢查
+            GitDependencyVersionChecker.StartBackgroundCheck();
+        }
+
+        private void OnDisable()
+        {
+            // 停止背景版本檢查
+            GitDependencyVersionChecker.StopBackgroundCheck();
         }
 
         private void InitializeComponents()
@@ -114,6 +123,9 @@ namespace MonoFSM.Utility.Editor
                     break;
                 case 2:
                     DrawPackageToSubmoduleTab();
+                    break;
+                case 3:
+                    DrawSettingsTab();
                     break;
             }
         }
@@ -244,6 +256,115 @@ namespace MonoFSM.Utility.Editor
                 RefreshPackageList();
                 EditorUtility.DisplayDialog("完成", "轉換完成！請檢查git狀態。", "OK");
             }
+        }
+
+        private void DrawSettingsTab()
+        {
+            GUILayout.Label("Git Dependencies 管理器設定", headerStyle);
+            GUILayout.Space(10);
+
+            // 背景版本檢查設定
+            GUILayout.BeginVertical(EditorStyles.helpBox);
+            GUILayout.Label("🔄 背景版本檢查", EditorStyles.boldLabel);
+            
+            var currentEnabled = GitDependencyVersionChecker.IsBackgroundCheckEnabled();
+            var newEnabled = EditorGUILayout.Toggle("啟用背景版本檢查", currentEnabled);
+            
+            if (newEnabled != currentEnabled)
+            {
+                GitDependencyVersionChecker.SetBackgroundCheckEnabled(newEnabled);
+            }
+
+            if (newEnabled)
+            {
+                GUILayout.Label("• 每 30 分鐘自動檢查 Git Dependencies 版本更新", EditorStyles.miniLabel);
+                GUILayout.Label("• 每 30 分鐘自動檢查 Local Packages 版本不匹配", EditorStyles.miniLabel);
+                GUILayout.Label("• 發現問題時會顯示通知對話框", EditorStyles.miniLabel);
+                
+                GUILayout.Space(5);
+                
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("立即檢查全部版本", GUILayout.Width(140)))
+                {
+                    GitDependencyVersionChecker.ManualVersionCheck();
+                }
+                GUILayout.FlexibleSpace();
+                GUILayout.EndHorizontal();
+                
+                GUILayout.Space(3);
+                GUILayout.Label("💡 此按鈕會檢查：Git Dependencies 更新 + 所有 Local Packages 版本不匹配", 
+                    EditorStyles.helpBox);
+            }
+            else
+            {
+                GUILayout.Label("• 背景版本檢查已停用", EditorStyles.miniLabel);
+                GUILayout.Label("• 只有在打開管理器時才會檢查版本", EditorStyles.miniLabel);
+                
+                GUILayout.Space(5);
+                
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("手動檢查全部版本", GUILayout.Width(140)))
+                {
+                    GitDependencyVersionChecker.ManualVersionCheck();
+                }
+                GUILayout.FlexibleSpace();
+                GUILayout.EndHorizontal();
+                
+                GUILayout.Space(3);
+                GUILayout.Label("💡 即使背景檢查停用，仍可手動檢查所有版本問題", 
+                    EditorStyles.helpBox);
+            }
+            
+            GUILayout.EndVertical();
+
+            GUILayout.Space(10);
+
+            // 其他設定
+            GUILayout.BeginVertical(EditorStyles.helpBox);
+            GUILayout.Label("⚙️ 其他設定", EditorStyles.boldLabel);
+            
+            var autoUpdate = EditorPrefs.GetBool("GitDependency.AutoUpdate", false);
+            var newAutoUpdate = EditorGUILayout.Toggle("自動更新（實驗性功能）", autoUpdate);
+            
+            if (newAutoUpdate != autoUpdate)
+            {
+                EditorPrefs.SetBool("GitDependency.AutoUpdate", newAutoUpdate);
+                
+                if (newAutoUpdate)
+                {
+                    EditorUtility.DisplayDialog(
+                        "警告", 
+                        "自動更新是實驗性功能，可能會影響專案穩定性。\n建議在重要專案中謹慎使用。", 
+                        "了解"
+                    );
+                }
+            }
+
+            if (newAutoUpdate)
+            {
+                GUILayout.Label("⚠️ 發現版本更新時會自動更新", EditorStyles.miniLabel);
+                GUILayout.Label("⚠️ 實驗性功能，建議測試環境使用", EditorStyles.miniLabel);
+            }
+            else
+            {
+                GUILayout.Label("• 發現版本更新時會提示但不自動更新", EditorStyles.miniLabel);
+            }
+            
+            GUILayout.EndVertical();
+
+            GUILayout.Space(10);
+
+            // 資訊區域
+            GUILayout.BeginVertical(EditorStyles.helpBox);
+            GUILayout.Label("📋 全面版本檢查功能", EditorStyles.boldLabel);
+            GUILayout.Label("🔍 Git Dependencies 檢查：檢查 Package Manager 中是否有更新版本");
+            GUILayout.Label("🔍 Local Packages 檢查：檢查所有 local packages 的版本不匹配");
+            GUILayout.Label("⚡ 版本比較：支援語意版本號比較 (如 v0.1.0 vs v0.1.1)");
+            GUILayout.Label("🔄 批量更新：可一次更新所有有問題的版本");
+            GUILayout.Label("🎯 智能導航：根據問題類型自動切換到對應的管理頁面");
+            GUILayout.EndVertical();
+
+            GUILayout.FlexibleSpace();
         }
 
         private void OnDestroy()

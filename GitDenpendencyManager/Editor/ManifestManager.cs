@@ -1,5 +1,7 @@
+using System;
 using System.IO;
 using System.Linq;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -56,7 +58,7 @@ namespace MonoFSM.Utility.Editor
                     "確定"
                 );
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogError($"[ManifestManager] 設定 scoped registry 時發生錯誤: {ex.Message}");
                 EditorUtility.DisplayDialog(
@@ -143,7 +145,7 @@ namespace MonoFSM.Utility.Editor
             // 寫回檔案
             File.WriteAllText(
                 ManifestPath,
-                manifestJson.ToString(Newtonsoft.Json.Formatting.Indented)
+                manifestJson.ToString(Formatting.Indented)
             );
 
             // 刷新 Package Manager
@@ -194,10 +196,18 @@ namespace MonoFSM.Utility.Editor
                 // 寫回檔案
                 File.WriteAllText(
                     packageJsonPath,
-                    packageJson.ToString(Newtonsoft.Json.Formatting.Indented)
+                    packageJson.ToString(Formatting.Indented)
                 );
                 Debug.Log(
                     $"[ManifestManager] 已將 scopedRegistry 複製到 package.json: {packageJsonPath}"
+                );
+                EditorUtility.DisplayDialog(
+                    "Scoped Registry 複製完成",
+                    $"已將 scopedRegistry 複製到 {Path.GetFileName(packageJsonPath)}\n\n"
+                    + $"Registry: {registryName}\n"
+                    + $"URL: {registryUrl}\n"
+                    + $"Scope: {scope}",
+                    "確定"
                 );
             }
         }
@@ -233,10 +243,143 @@ namespace MonoFSM.Utility.Editor
 
                 return false;
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogWarning($"[ManifestManager] 檢查 scope 時發生錯誤: {ex.Message}");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// 同步 package.json 中的 scopedRegistries 到主專案的 manifest.json
+        /// </summary>
+        public static void SyncScopedRegistriesFromPackageJson(
+            JObject packageJson,
+            string packageJsonPath
+        )
+        {
+            try
+            {
+                var scopedRegistries = packageJson["scopedRegistries"] as JArray;
+                if (scopedRegistries == null || scopedRegistries.Count == 0)
+                {
+                    Debug.Log(
+                        $"[ManifestManager] {Path.GetFileName(packageJsonPath)} 中沒有 scopedRegistries"
+                    );
+                    return;
+                }
+
+                if (!File.Exists(ManifestPath))
+                {
+                    Debug.LogError($"[ManifestManager] 找不到主專案 manifest.json: {ManifestPath}");
+                    return;
+                }
+
+                var manifestJson = JObject.Parse(File.ReadAllText(ManifestPath));
+                var manifestScopedRegistries = manifestJson["scopedRegistries"] as JArray;
+
+                if (manifestScopedRegistries == null)
+                    manifestJson["scopedRegistries"] = manifestScopedRegistries = new JArray();
+
+                var hasChanges = false;
+                var addedCount = 0;
+
+                // 逐一檢查 package.json 中的 scopedRegistries
+                foreach (var packageRegistry in scopedRegistries)
+                {
+                    var packageRegObj = packageRegistry as JObject;
+                    if (packageRegObj == null)
+                        continue;
+
+                    var name = packageRegObj["name"]?.ToString();
+                    var url = packageRegObj["url"]?.ToString();
+                    var scopes = packageRegObj["scopes"] as JArray;
+
+                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(url) || scopes == null)
+                        continue;
+
+                    // 正規化 name 和 url 以避免空白字符問題
+                    name = name.Trim();
+                    url = url.Trim();
+
+                    // 在 manifest.json 中尋找相同的 registry
+                    JObject existingRegistry = null;
+                    foreach (var manifestRegistry in manifestScopedRegistries)
+                    {
+                        var manifestRegObj = manifestRegistry as JObject;
+                        if (manifestRegObj != null)
+                        {
+                            var existingName = manifestRegObj["name"]?.ToString()?.Trim();
+                            var existingUrl = manifestRegObj["url"]?.ToString()?.Trim();
+
+                            if (existingName == name && existingUrl == url)
+                            {
+                                existingRegistry = manifestRegObj;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (existingRegistry == null)
+                    {
+                        // 創建新的 registry
+                        var newRegistry = new JObject
+                        {
+                            ["name"] = name,
+                            ["url"] = url,
+                            ["scopes"] = new JArray(scopes)
+                        };
+                        manifestScopedRegistries.Add(newRegistry);
+                        hasChanges = true;
+                        addedCount++;
+                        Debug.Log(
+                            $"[ManifestManager] 已添加新的 scopedRegistry: {name} ({url})"
+                        );
+                    }
+                    else
+                    {
+                        // 檢查並合併 scopes
+                        var existingScopes = existingRegistry["scopes"] as JArray;
+                        if (existingScopes != null)
+                            foreach (var scope in scopes)
+                            {
+                                var scopeStr = scope.ToString().Trim();
+                                if (!existingScopes.Any(s => s.ToString().Trim() == scopeStr))
+                                {
+                                    existingScopes.Add(scopeStr);
+                                    hasChanges = true;
+                                    Debug.Log(
+                                        $"[ManifestManager] 已將 scope '{scopeStr}' 添加到現有 registry: {name}"
+                                    );
+                                }
+                            }
+                    }
+                }
+
+                // 如果有變更，寫回 manifest.json
+                if (hasChanges)
+                {
+                    File.WriteAllText(
+                        ManifestPath,
+                        manifestJson.ToString(Formatting.Indented)
+                    );
+                    Debug.Log(
+                        $"[ManifestManager] 已同步 {addedCount} 個 scopedRegistries 到主專案 manifest.json"
+                    );
+
+                    // 刷新 Package Manager
+                    AssetDatabase.Refresh();
+                }
+                else
+                {
+                    Debug.Log("[ManifestManager] manifest.json 的 scopedRegistries 已是最新狀態");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"[ManifestManager] 同步 scopedRegistries 時發生錯誤: {ex.Message}"
+                );
             }
         }
 
