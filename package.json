@@ -1,6 +1,6 @@
 {
   "name": "com.monofsm.utility",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "displayName": "MonoFSM Utility",
   "description": "Utility package for MonoFSM and dependency installer",
   "unity": "6001.1",

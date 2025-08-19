@@ -103,7 +103,7 @@ namespace MonoFSM.Core
             }
 
             // 參考GenerateAnimatorOverrideController的路徑獲取方式
-            var prefabPath = "";
+            string prefabPath;
             var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
             
             if (useGenericPath && !string.IsNullOrEmpty(customFolderPath))
@@ -120,36 +120,48 @@ namespace MonoFSM.Core
                 prefabPath = AssetDatabase.GetAssetPath(PrefabUtility.GetCorrespondingObjectFromSource(animator.gameObject));
                 if (string.IsNullOrEmpty(prefabPath))
                 {
-                    // 如果不是prefab，使用Assets根目錄
-                    prefabPath = "Assets/dummy.prefab";
+                    EditorUtility.DisplayDialog("Animator Controller Creation Error",
+                        "The Animator is not part of a prefab. Please ensure the Animator is attached to a prefab instance.",
+                        "OK");
+                    return null;
                 }
             }
 
             Undo.RecordObject(animator, "Create Animator Controller");
 
             var folderPath = Path.GetDirectoryName(prefabPath);
-            var controllerName = animator.gameObject.name + " Controller";
+            // 使用Prefab根物件的名稱，而不是Animator GameObject的名稱
+            var prefabRootName = prefabStage
+                ? prefabStage.prefabContentsRoot.name
+                : Path.GetFileNameWithoutExtension(prefabPath);
+            var controllerName = prefabRootName;
             var controllerPath = Path.Combine(folderPath, controllerName + ".controller");
             
-            // 確保路徑唯一
-            controllerPath = AssetDatabase.GenerateUniqueAssetPath(controllerPath);
-            
-            Debug.Log($"Creating controller at: {controllerPath}");
-
             AnimatorController newController;
-
-            // 如果已有controller，複製它；否則創建新的
-            if (animator.runtimeAnimatorController != null)
+            
+            // 檢查路徑上是否已經存在同名的controller
+            if (File.Exists(controllerPath))
             {
-                var originalPath = AssetDatabase.GetAssetPath(animator.runtimeAnimatorController);
-                Debug.Log($"Copying existing controller from: {originalPath}");
-                AssetDatabase.CopyAsset(originalPath, controllerPath);
+                Debug.Log($"Found existing controller at: {controllerPath}, using it directly");
                 newController = AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath);
             }
             else
             {
-                Debug.Log("Creating new controller");
-                newController = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
+                Debug.Log($"Creating controller at: {controllerPath}");
+                
+                // 如果已有controller，複製它；否則創建新的
+                if (animator.runtimeAnimatorController != null)
+                {
+                    var originalPath = AssetDatabase.GetAssetPath(animator.runtimeAnimatorController);
+                    Debug.Log($"Copying existing controller from: {originalPath}");
+                    AssetDatabase.CopyAsset(originalPath, controllerPath);
+                    newController = AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath);
+                }
+                else
+                {
+                    Debug.Log("Creating new controller");
+                    newController = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
+                }
             }
 
             if (newController == null)
