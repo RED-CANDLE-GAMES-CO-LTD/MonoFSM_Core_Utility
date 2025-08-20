@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading;
 using Newtonsoft.Json;
 using UnityEditor.PackageManager;
 using UnityEngine;
@@ -280,11 +279,11 @@ namespace MonoFSM.Core
                     result.assemblies.Add(assemblyInfo);
                     singleAssemblyTime.Stop();
 
-                    Debug.Log(
-                        $"[AssemblyDependencyAnalyzer] {assemblyInfo.assemblyName}: "
-                            + $"引用數={assemblyInfo.referencedGUIDs.Count}, 外部引用={assemblyInfo.hasExternalReferences}, "
-                            + $"外部package數={assemblyInfo.referencedPackages.Count}, 耗時={singleAssemblyTime.ElapsedMilliseconds}ms"
-                    );
+                    // Debug.Log(
+                    //     $"[AssemblyDependencyAnalyzer] {assemblyInfo.assemblyName}: "
+                    //         + $"引用數={assemblyInfo.referencedGUIDs.Count}, 外部引用={assemblyInfo.hasExternalReferences}, "
+                    //         + $"外部package數={assemblyInfo.referencedPackages.Count}, 耗時={singleAssemblyTime.ElapsedMilliseconds}ms"
+                    // );
 
                     if (assemblyInfo.hasExternalReferences)
                     {
@@ -441,9 +440,9 @@ namespace MonoFSM.Core
                 if (references != null)
                 {
                     var referenceCount = references.Count;
-                    Debug.Log(
-                        $"[AssemblyDependencyAnalyzer] {asmdefName} 有 {referenceCount} 個引用，檔案讀取耗時: {fileReadStopwatch.ElapsedMilliseconds}ms"
-                    );
+                    // Debug.Log(
+                    //     $"[AssemblyDependencyAnalyzer] {asmdefName} 有 {referenceCount} 個引用，檔案讀取耗時: {fileReadStopwatch.ElapsedMilliseconds}ms"
+                    // );
 
                     var guidProcessingTime = Stopwatch.StartNew();
                     var packagePathLookupTime = 0L;
@@ -512,13 +511,13 @@ namespace MonoFSM.Core
                     }
                     guidProcessingTime.Stop();
 
-                    Debug.Log(
-                        $"[AssemblyDependencyAnalyzer] {asmdefName} GUID處理詳細耗時 - "
-                            + $"總計: {guidProcessingTime.ElapsedMilliseconds}ms, "
-                            + $"PackagePath查詢: {packagePathLookupTime}ms, "
-                            + $"IsLocalPackage: {isLocalPackageTime}ms, "
-                            + $"GetAssemblyName: {getAssemblyNameTime}ms"
-                    );
+                    // Debug.Log(
+                    //     $"[AssemblyDependencyAnalyzer] {asmdefName} GUID處理詳細耗時 - "
+                    //         + $"總計: {guidProcessingTime.ElapsedMilliseconds}ms, "
+                    //         + $"PackagePath查詢: {packagePathLookupTime}ms, "
+                    //         + $"IsLocalPackage: {isLocalPackageTime}ms, "
+                    //         + $"GetAssemblyName: {getAssemblyNameTime}ms"
+                    // );
                 }
             }
             catch (Exception ex)
