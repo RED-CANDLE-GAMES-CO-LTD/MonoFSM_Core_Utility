@@ -21,7 +21,7 @@ namespace MonoFSM.Core.Editor.Utility
         /// <param name="searchFilter">Unity AssetDatabase 搜尋過濾器，如果為 null 則使用預設過濾器</param>
         /// <param name="validator">自定義驗證函數，如果為 null 則不進行額外驗證</param>
         /// <returns>符合條件的資產列表</returns>
-        public static IEnumerable<T> GetFilteredAssets<T>(string searchFilter = null,
+        public static List<T> GetFilteredAssets<T>(string searchFilter = null,
             Func<T, bool> validator = null) where T : ScriptableObject
         {
             var sw = Stopwatch.StartNew();
@@ -60,11 +60,11 @@ namespace MonoFSM.Core.Editor.Utility
         /// <param name="name">要搜尋的名稱</param>
         /// <param name="exactMatch">是否進行精確匹配，false 表示模糊搜尋</param>
         /// <returns>符合條件的資產列表</returns>
-        public static IEnumerable<T> FindAssetsByName<T>(string name, bool exactMatch = false)
+        public static List<T> FindAssetsByName<T>(string name, bool exactMatch = false)
             where T : ScriptableObject
         {
             if (string.IsNullOrEmpty(name))
-                return Enumerable.Empty<T>();
+                return new List<T>();
 
             // 建立搜尋過濾器
             var searchFilter = exactMatch
