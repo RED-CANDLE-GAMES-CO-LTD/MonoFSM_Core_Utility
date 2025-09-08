@@ -66,8 +66,9 @@ public static class MonoNodeExtension
         var list = new List<Component>();
         if (parents == null || parents.Length == 0)
         {
-            Debug.LogError("parent Type not found:" + parentType, monoBehaviour);
-            return Array.Empty<Component>();
+            // Debug.LogError("parent Type not found:" + parentType, monoBehaviour);
+            // return Array.Empty<Component>();
+            parents = new[] { monoBehaviour.transform.root as Component };
         }
 
         foreach (var binder in parents)
@@ -358,6 +359,16 @@ public static class MonoNodeExtension
 
 #else
         return go.gameObject.AddComponent(t);
+#endif
+    }
+
+    public static Component AddComp(this GameObject go, Type t)
+    {
+#if UNITY_EDITOR
+        return Undo.AddComponent(go, t);
+
+#else
+        return go.AddComponent(t);
 #endif
     }
 
