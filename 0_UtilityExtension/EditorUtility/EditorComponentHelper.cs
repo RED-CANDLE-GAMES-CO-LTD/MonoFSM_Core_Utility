@@ -17,6 +17,11 @@ public static class EditorComponentHelper
     )
     {
 #if UNITY_EDITOR
+        if (target == null)
+        {
+            Debug.LogError("Target MonoBehaviour is null.");
+            return false;
+        }
         if (!Application.isPlaying && component == null)
             component = target.GetComponent<T>();
 #endif
@@ -43,6 +48,19 @@ public static class EditorComponentHelper
         return component != null;
     }
 
+    public static void EnsureComponentsInChildren<T>(
+        this MonoBehaviour target,
+        ref T[] components,
+        bool required = true
+    )
+    {
+#if UNITY_EDITOR
+        if (!Application.isPlaying && (components == null || components.Length == 0))
+            components = target.GetComponentsInChildren<T>();
+#endif
+    }
+
+
     public static void EnsureComponentInChildren<T>(
         this MonoBehaviour target,
         ref T component,
@@ -58,16 +76,34 @@ public static class EditorComponentHelper
 
     /// <summary>
     /// 在 Editor 時期自動取得 Component（從父物件尋找），Play 時如果為 null 則顯示錯誤
+    /// FIXME: 如果是null這個會很白痴耶, 還要用bool? 還是還好效能可以忽略不計(Editor下喔)
     /// </summary>
     public static void EnsureComponentInParent<T>(
         this MonoBehaviour target,
         ref T component,
+        bool includeSelf = true,
         bool logIfMissing = true
     )
     {
 #if UNITY_EDITOR
-        if (!Application.isPlaying && component == null)
-            component = target.GetComponentInParent<T>();
+        if (target == null)
+        {
+            Debug.LogError("Target MonoBehaviour is null.?????");
+            return;
+        }
+
+        if (!Application.isPlaying)
+        {
+            var originalTarget = target;
+            if (!includeSelf) target = target.transform.parent?.GetComponent<MonoBehaviour>();
+            if (target == null)
+            {
+                Debug.LogError("Target MonoBehaviour's parent is null.?", originalTarget);
+                return;
+            }
+        }
+        //runtime不該？
+        // component = target.GetComponentInParent<T>();
 #endif
 
         EnsureComponentLog(target, ref component, logIfMissing);
