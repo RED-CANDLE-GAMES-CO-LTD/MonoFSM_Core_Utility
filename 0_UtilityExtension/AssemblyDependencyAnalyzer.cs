@@ -102,6 +102,9 @@ namespace MonoFSM.Core
             /// </summary>
             public bool NeedsVersionUpdate()
             {
+                Debug.Log(
+                    $"[AssemblyDependencyAnalyzer] 檢查 {packageName} 版本更新需求: package.json 版本={versionInPackageJson}, Package Manager 版本={versionInPackageManager}, 版本不匹配={hasVersionMismatch}"
+                );
                 if (string.IsNullOrEmpty(versionInPackageJson) || string.IsNullOrEmpty(versionInPackageManager))
                     return false;
 
@@ -319,6 +322,9 @@ namespace MonoFSM.Core
                                     refPackage.versionInPackageManager =
                                         GetInstalledPackageVersion(refPackage.packageName);
 
+                                    Debug.Log(
+                                        $"[AssemblyDependencyAnalyzer] {refPackage.packageName} 版本檢測: package.json 版本={refPackage.versionInPackageJson}, Package Manager 版本={refPackage.versionInPackageManager}"
+                                    );
                                     // 檢查版本是否不匹配
                                     if (!string.IsNullOrEmpty(refPackage.versionInPackageJson) &&
                                         !string.IsNullOrEmpty(refPackage.versionInPackageManager))
@@ -328,19 +334,15 @@ namespace MonoFSM.Core
 
                                         // 如果版本不匹配，加入版本不匹配清單
                                         if (refPackage.hasVersionMismatch && refPackage.NeedsVersionUpdate())
-                                            if (!result.versionMismatchDependencies.Any(d =>
-                                                    d.packageName == refPackage.packageName))
+                                            if (result.versionMismatchDependencies.All(d =>
+                                                    d.packageName != refPackage.packageName))
                                                 result.versionMismatchDependencies.Add(refPackage);
                                     }
 
                                     versionStopwatch.Stop();
                                     versionCheckTime += versionStopwatch.ElapsedMilliseconds;
 
-                                    if (
-                                        !result.existingDependencies.Any(d =>
-                                            d.packageName == refPackage.packageName
-                                        )
-                                    )
+                                    if (result.existingDependencies.All(d => d.packageName != refPackage.packageName))
                                     {
                                         result.existingDependencies.Add(refPackage);
                                     }

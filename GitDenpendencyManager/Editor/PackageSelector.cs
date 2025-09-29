@@ -96,6 +96,7 @@ namespace MonoFSM.Utility.Editor
 
                     string packageJsonPath = null;
 
+                    //TODO:太多不重要的package被撈出來了? 想要編輯時怎麼辦呢？ 要帶有gitDependency的package才需要被列出嗎？
                     if (package.source == UnityEditor.PackageManager.PackageSource.Local)
                     {
                         // 本地 package

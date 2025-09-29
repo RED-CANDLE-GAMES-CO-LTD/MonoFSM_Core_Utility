@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using MonoFSM.Core;
 using UnityEditor;
 using UnityEngine;
+using System.Linq;
 
 namespace MonoFSM.Utility.Editor
 {
@@ -12,28 +13,22 @@ namespace MonoFSM.Utility.Editor
     /// </summary>
     public class AssemblyDependencyDisplayHelper
     {
-        private GUIStyle badgeStyle;
-        private GUIStyle progressBarStyle;
-        private bool stylesInitialized = false;
+        private GUIStyle _badgeStyle;
+        private bool _stylesInitialized;
 
         private void InitializeStyles()
         {
-            if (stylesInitialized)
+            if (_stylesInitialized)
                 return;
 
-            badgeStyle = new GUIStyle(EditorStyles.miniButton)
+            _badgeStyle = new GUIStyle(EditorStyles.miniButton)
             {
                 fontSize = 10,
                 padding = new RectOffset(8, 8, 2, 2),
                 margin = new RectOffset(2, 2, 2, 2),
             };
 
-            progressBarStyle = new GUIStyle(EditorStyles.helpBox)
-            {
-                padding = new RectOffset(4, 4, 2, 2),
-            };
-
-            stylesInitialized = true;
+            _stylesInitialized = true;
         }
 
         /// <summary>
@@ -49,7 +44,7 @@ namespace MonoFSM.Utility.Editor
             GUILayout.BeginHorizontal();
             GUILayout.Label($"{label}: ", GUILayout.Width(120));
 
-            if (GUILayout.Button($"{count}", badgeStyle, GUILayout.Width(40)))
+            if (GUILayout.Button($"{count}", _badgeStyle, GUILayout.Width(40)))
             {
                 // 點擊時可以做一些動作，例如聚焦到該項目
             }
@@ -278,8 +273,13 @@ namespace MonoFSM.Utility.Editor
             }
             else
             {
+                // 首先檢查是否能從 manifest.json 自動獲取資訊
+                DrawAutoDetectedDependencies(missing, onUpdateCallback);
+
+                GUILayout.Space(5);
+                
                 // 提供多種添加方式
-                GUILayout.Label("添加方式:", EditorStyles.miniLabel);
+                GUILayout.Label("手動添加方式:", EditorStyles.miniLabel);
 
                 // Git URL 輸入方式
                 GUILayout.BeginHorizontal();
@@ -442,6 +442,219 @@ namespace MonoFSM.Utility.Editor
             }
 
             GUILayout.EndVertical();
+        }
+
+        /// <summary>
+        /// 繪製從 Package Manager 自動檢測到的依賴資訊
+        /// </summary>
+        private void DrawAutoDetectedDependencies(
+            AssemblyDependencyAnalyzer.ReferencedPackageInfo missing,
+            Action<AssemblyDependencyAnalyzer.ReferencedPackageInfo> onUpdateCallback
+        )
+        {
+            // 初始化依賴快取
+            PackageDependencyReader.InitializeDependencyCache();
+
+            // 精確匹配
+            var exactMatch = PackageDependencyReader.GetDependencyInfo(missing.packageName);
+
+            // 模糊匹配
+            // var similarPackages = PackageDependencyReader.FindSimilarPackages(missing.packageName);
+
+            // if (exactMatch != null || similarPackages.Count > 0)
+            if (exactMatch != null) // || similarPackages.Count > 0)
+            {
+                GUILayout.BeginVertical(EditorStyles.helpBox);
+                GUILayout.Label("📋 從 Package Manager 檢測到的依賴:", EditorStyles.boldLabel);
+
+                // 精確匹配
+                if (exactMatch != null)
+                {
+                    GUILayout.Space(3);
+                    DrawDependencyQuickAdd(exactMatch, missing, onUpdateCallback, true);
+                }
+
+                // 相似的 packages
+                // if (similarPackages.Count > 1 || (similarPackages.Count == 1 && exactMatch == null))
+                // {
+                //     GUILayout.Space(3);
+                //     GUILayout.Label("🔍 相似的依賴項目:", EditorStyles.miniLabel);
+                //
+                //     var toShow = similarPackages.Take(3).ToList(); // 最多顯示3個
+                //     foreach (var similar in toShow)
+                //     {
+                //         if (similar != exactMatch) // 避免重複顯示
+                //         {
+                //             DrawDependencyQuickAdd(similar, missing, onUpdateCallback, false);
+                //         }
+                //     }
+                //
+                //     if (similarPackages.Count > 3)
+                //     {
+                //         GUILayout.Label($"... 還有 {similarPackages.Count - 3} 個相似項目", EditorStyles.miniLabel);
+                //     }
+                // }
+
+                GUILayout.EndVertical();
+            }
+        }
+
+        /// <summary>
+        /// 繪製依賴快速添加按鈕
+        /// </summary>
+        private void DrawDependencyQuickAdd(
+            PackageDependencyReader.DependencyInfo depInfo,
+            AssemblyDependencyAnalyzer.ReferencedPackageInfo missing,
+            Action<AssemblyDependencyAnalyzer.ReferencedPackageInfo> onUpdateCallback,
+            bool isExactMatch
+        )
+        {
+            GUILayout.BeginHorizontal();
+
+            // 類型圖示
+            var typeIcon = GetDependencyTypeIcon(depInfo.Type);
+            var typeColor = GetDependencyTypeColor(depInfo.Type);
+
+            var originalColor = GUI.color;
+            GUI.color = typeColor;
+            GUILayout.Label(typeIcon, GUILayout.Width(20));
+            GUI.color = originalColor;
+
+            // Package 名稱
+            var nameStyle = isExactMatch ? EditorStyles.boldLabel : EditorStyles.label;
+            GUILayout.Label(depInfo.PackageName, nameStyle, GUILayout.Width(180));
+
+            // 版本或 URL 資訊
+            var infoText = GetDependencyInfoText(depInfo);
+            GUILayout.Label(infoText, EditorStyles.miniLabel, GUILayout.MaxWidth(200));
+
+            GUILayout.FlexibleSpace();
+
+            // 快速添加按鈕
+            var buttonText = isExactMatch ? "✅ 使用此依賴" : "📋 使用";
+            var buttonWidth = isExactMatch ? 100 : 60;
+
+            if (GUILayout.Button(buttonText, GUILayout.Width(buttonWidth)))
+            {
+                ApplyDependencyInfo(depInfo, missing, onUpdateCallback);
+            }
+
+            GUILayout.EndHorizontal();
+        }
+
+        /// <summary>
+        /// 應用依賴資訊到目標 package
+        /// </summary>
+        private void ApplyDependencyInfo(
+            PackageDependencyReader.DependencyInfo depInfo,
+            AssemblyDependencyAnalyzer.ReferencedPackageInfo missing,
+            Action<AssemblyDependencyAnalyzer.ReferencedPackageInfo> onUpdateCallback
+        )
+        {
+            switch (depInfo.Type)
+            {
+                case PackageDependencyReader.DependencyType.Git:
+                    missing.gitUrl = depInfo.Url;
+                    missing.hasGitUrl = true;
+                    break;
+
+                case PackageDependencyReader.DependencyType.Registry:
+                    missing.gitUrl = "registry:" + (depInfo.Version ?? "latest");
+                    missing.hasGitUrl = false;
+                    break;
+
+                case PackageDependencyReader.DependencyType.Local:
+                    missing.gitUrl = depInfo.Url;
+                    missing.hasGitUrl = false;
+                    break;
+
+                case PackageDependencyReader.DependencyType.Embedded:
+                    missing.gitUrl = "embedded:" + depInfo.PackageName;
+                    missing.hasGitUrl = false;
+                    break;
+
+                case PackageDependencyReader.DependencyType.BuiltIn:
+                    missing.gitUrl = "builtin:" + depInfo.PackageName;
+                    missing.hasGitUrl = false;
+                    break;
+            }
+
+            onUpdateCallback?.Invoke(missing);
+
+            Debug.Log($"[AutoFill] 已自動填入 {missing.packageName} 的依賴資訊 (來源: {depInfo.PackageName})");
+        }
+
+        /// <summary>
+        /// 獲取依賴類型對應的圖示
+        /// </summary>
+        private string GetDependencyTypeIcon(PackageDependencyReader.DependencyType type)
+        {
+            switch (type)
+            {
+                case PackageDependencyReader.DependencyType.Git:
+                    return "🟢";
+                case PackageDependencyReader.DependencyType.Registry:
+                    return "🔵";
+                case PackageDependencyReader.DependencyType.Local:
+                    return "🟡";
+                case PackageDependencyReader.DependencyType.Embedded:
+                    return "🟠";
+                case PackageDependencyReader.DependencyType.BuiltIn:
+                    return "⚪";
+                default:
+                    return "❓";
+            }
+        }
+
+        /// <summary>
+        /// 獲取依賴類型對應的顏色
+        /// </summary>
+        private Color GetDependencyTypeColor(PackageDependencyReader.DependencyType type)
+        {
+            switch (type)
+            {
+                case PackageDependencyReader.DependencyType.Git:
+                    return Color.green;
+                case PackageDependencyReader.DependencyType.Registry:
+                    return Color.blue;
+                case PackageDependencyReader.DependencyType.Local:
+                    return Color.yellow;
+                case PackageDependencyReader.DependencyType.Embedded:
+                    return new Color(1f, 0.5f, 0f); // Orange
+                case PackageDependencyReader.DependencyType.BuiltIn:
+                    return Color.gray;
+                default:
+                    return Color.gray;
+            }
+        }
+
+        /// <summary>
+        /// 獲取依賴的描述文字
+        /// </summary>
+        private string GetDependencyInfoText(PackageDependencyReader.DependencyInfo depInfo)
+        {
+            switch (depInfo.Type)
+            {
+                case PackageDependencyReader.DependencyType.Git:
+                    var gitInfo = depInfo.Url ?? "";
+                    return gitInfo.Length > 40 ? gitInfo.Substring(0, 37) + "..." : gitInfo;
+
+                case PackageDependencyReader.DependencyType.Registry:
+                    return $"v{depInfo.Version ?? "latest"}";
+
+                case PackageDependencyReader.DependencyType.Local:
+                    var localPath = depInfo.ResolvedPath ?? depInfo.Url ?? "";
+                    return localPath.Length > 30 ? "..." + localPath.Substring(localPath.Length - 27) : localPath;
+
+                case PackageDependencyReader.DependencyType.Embedded:
+                    return $"Embedded v{depInfo.Version ?? ""}";
+
+                case PackageDependencyReader.DependencyType.BuiltIn:
+                    return $"Built-in v{depInfo.Version ?? ""}";
+
+                default:
+                    return "Unknown";
+            }
         }
 
         private string GetStatusIcon(AssemblyDependencyAnalyzer.ReferencedPackageInfo package)

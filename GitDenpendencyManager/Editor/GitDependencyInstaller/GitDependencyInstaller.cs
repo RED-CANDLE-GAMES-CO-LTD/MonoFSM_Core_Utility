@@ -17,7 +17,6 @@ namespace MonoFSM.Core
 {
     /// <summary>
     /// Git Dependency 安裝器 - 檢查和安裝 package.json 中的 git dependencies
-    /// 使用 #if UNITY_EDITOR 模式，可在 Runtime assembly 中提供 Editor 功能
     /// </summary>
     public static partial class GitDependencyInstaller
     {
@@ -50,9 +49,12 @@ namespace MonoFSM.Core
                 if (!isInstalled || string.IsNullOrEmpty(installedVersion) || string.IsNullOrEmpty(targetVersion))
                     return false;
 
+                Debug.Log(
+                    $"[GitDependencyInstaller] 檢查版本更新: 已安裝 {installedVersion}, 目標 {targetVersion}"
+                );
                 // 如果 targetVersion 是 "latest"，假設總是有更新
-                if (targetVersion == "latest")
-                    return true;
+                // if (targetVersion == "latest")
+                //     return true;
 
                 return CompareVersions(targetVersion, installedVersion) > 0;
             }
@@ -73,7 +75,8 @@ namespace MonoFSM.Core
                 {
                     var v1Parts = version1.Split('.').Select(int.Parse).ToArray();
                     var v2Parts = version2.Split('.').Select(int.Parse).ToArray();
-
+                    Debug.Log(
+                        $"[GitDependencyInstaller] 比較版本號: {version1} ({string.Join(",", v1Parts)}) 與 {version2} ({string.Join(",", v2Parts)})");
                     var maxLength = Math.Max(v1Parts.Length, v2Parts.Length);
                     for (var i = 0; i < maxLength; i++)
                     {
@@ -86,10 +89,12 @@ namespace MonoFSM.Core
                             return -1;
                     }
 
+                    
                     return 0;
                 }
                 catch
                 {
+                    Debug.Log($"[GitDependencyInstaller] 無法解析版本號: '{version1}' 或 '{version2}'，使用字串比較");
                     // 如果版本號格式不標準，使用字串比較
                     return string.Compare(version1, version2, StringComparison.Ordinal);
                 }
@@ -204,6 +209,7 @@ namespace MonoFSM.Core
                         gitInfo.installedVersion = installedPackage.version;
                         gitInfo.targetVersion = ExtractVersionFromGitUrl(packageUrl);
                         result.installedDependencies.Add(packageName);
+                        Debug.Log("Installed version: " + gitInfo.installedVersion);
                     }
                     else
                     {
@@ -402,14 +408,16 @@ namespace MonoFSM.Core
         /// </summary>
         private static string ExtractVersionFromGitUrl(string gitUrl)
         {
-            // 嘗試提取 #v 或 #
+            if (!gitUrl.StartsWith("http")) //純數字 local 版本？
+                return gitUrl;
+            // 嘗試提取#, ex: https:....#0.1.3
             var hashIndex = gitUrl.IndexOf('#');
             if (hashIndex > 0 && hashIndex < gitUrl.Length - 1)
             {
                 return gitUrl.Substring(hashIndex + 1);
             }
 
-            return "latest";
+            return ""; //unknown??? (無法從 URL 提取版本號)
         }
         
         /// <summary>

@@ -114,7 +114,7 @@ namespace MonoFSM.Utility.Editor
             scrollPosition = GUILayout.BeginScrollView(scrollPosition);
 
             // 結果摘要 - 更詳細的資訊
-            DrawDetailedAnalysisSummary();
+            // DrawDetailedAnalysisSummary();
 
             GUILayout.Space(10);
 
@@ -192,7 +192,7 @@ namespace MonoFSM.Utility.Editor
             var allDependencies = new List<AssemblyDependencyAnalyzer.ReferencedPackageInfo>();
             allDependencies.AddRange(analysisResult.missingDependencies);
             allDependencies.AddRange(analysisResult.existingDependencies);
-            allDependencies.AddRange(analysisResult.versionMismatchDependencies);
+            // allDependencies.AddRange(analysisResult.versionMismatchDependencies);
 
             // 按狀態分類顯示外部引用
             GUILayout.Label("🔗 所有外部引用:", EditorStyles.boldLabel);
@@ -215,7 +215,7 @@ namespace MonoFSM.Utility.Editor
                 else if (analysisResult.existingDependencies.Contains(dependency))
                 {
                     statusIcon = "✅";
-                    statusText = "已登記 Registered";
+                    statusText = "？已登記 Registered";
                     statusColor = Color.green;
                 }
                 else if (dependency.isLocalPackage)

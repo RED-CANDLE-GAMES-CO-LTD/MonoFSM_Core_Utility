@@ -38,7 +38,7 @@ namespace MonoFSM.Utility.Editor
         // [MenuItem("Tools/MonoFSM/Dependencies/Git Dependencies Installer", false, 100)]
         public static GitDependencyWindow ShowWindow()
         {
-            var window = GetWindow<GitDependencyWindow>("Git Dependencies");
+            var window = GetWindow<GitDependencyWindow>("Git Dependencies Manager");
             window.minSize = new Vector2(700, 500); // 增加最小尺寸以容納更多資訊
             window.Show();
             return window;
