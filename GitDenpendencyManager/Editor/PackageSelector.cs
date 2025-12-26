@@ -19,12 +19,25 @@ namespace MonoFSM.Utility.Editor
         private string[] availablePackagePaths;
         private int selectedPackageIndex = 0;
         private string selectedPackageJsonPath = "";
+        private bool _filterGitDependencies = true; // 新增：是否只顯示包含 gitDependencies 的 packages
 
         public string GetSelectedPackagePath() => selectedPackageJsonPath;
 
         public void DrawGUI()
         {
             GUILayout.BeginVertical(EditorStyles.helpBox);
+
+            // 新增 checkbox 控制項
+            GUILayout.BeginHorizontal();
+            var newFilterState = EditorGUILayout.ToggleLeft("只顯示包含 gitDependencies 的 packages", _filterGitDependencies);
+            if (newFilterState != _filterGitDependencies)
+            {
+                _filterGitDependencies = newFilterState;
+                RefreshPackageOptions(); // 當篩選狀態改變時重新整理選項
+            }
+
+            GUILayout.EndHorizontal();
+            
             GUILayout.BeginHorizontal();
 
             GUILayout.Label("選擇 Package:", GUILayout.Width(100));
@@ -119,8 +132,12 @@ namespace MonoFSM.Utility.Editor
 
                     if (!string.IsNullOrEmpty(packageJsonPath) && File.Exists(packageJsonPath))
                     {
-                        packageOptions.Add($"{package.displayName} ({package.name})");
-                        packagePaths.Add(packageJsonPath);
+                        // 如果啟用了 gitDependencies 篩選，則檢查當前 package 是否包含 gitDependencies
+                        if (!_filterGitDependencies || PackageHasGitDependencies(package))
+                        {
+                            packageOptions.Add($"{package.displayName} ({package.name})");
+                            packagePaths.Add(packageJsonPath);
+                        }
                     }
                 }
             }
@@ -156,6 +173,22 @@ namespace MonoFSM.Utility.Editor
             return packageName.StartsWith("com.unity.modules.")
                 || packageName.StartsWith("com.unity.")
                 || packageName == "";
+        }
+
+        /// <summary>
+        /// 檢查 package 是否包含 gitDependencies
+        /// </summary>
+        private bool PackageHasGitDependencies(UnityEditor.PackageManager.PackageInfo package)
+        {
+            // 檢查 package.json 中是否有 gitDependencies
+            var packageJsonPath = Path.Combine(package.resolvedPath, "package.json");
+            if (File.Exists(packageJsonPath))
+            {
+                var jsonText = File.ReadAllText(packageJsonPath);
+                return jsonText.Contains("\"gitDependencies\"");
+            }
+
+            return false;
         }
     }
 }
