@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using UnityEditor;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 using Object = UnityEngine.Object;
 #if UNITY_EDITOR
+using UnityEditor;
 #endif
 
 // public static class ZString

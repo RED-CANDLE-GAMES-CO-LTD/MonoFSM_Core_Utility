@@ -5,11 +5,11 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
-using UnityEditor.PackageManager;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 #if UNITY_EDITOR
 using UnityEditor;
+using UnityEditor.PackageManager;
 using Newtonsoft.Json.Linq;
 #endif
 
@@ -181,6 +181,7 @@ namespace MonoFSM.Core
             {
                 try
                 {
+#if UNITY_EDITOR
                     // 嘗試從 package.json 檔案中讀取 name
                     if (File.Exists(packageJsonPath))
                     {
@@ -192,7 +193,7 @@ namespace MonoFSM.Core
                             return name;
                         }
                     }
-
+#endif
                     // 備用：從目錄名稱取得
                     var packageDir = Path.GetDirectoryName(packageJsonPath);
                     return Path.GetFileName(packageDir);

@@ -234,7 +234,7 @@ namespace MonoFSM.Core
         }
 
 #else
-        // Runtime 版本 - 只回傳空清單
+        // Runtime 版本 - 只回傳空清單或 null
         public static List<string> GetLocalPackagePaths()
         {
             return new List<string>();
@@ -254,17 +254,8 @@ namespace MonoFSM.Core
 
         public static void ClearCache() { }
 
-        public static List<UnityEditor.PackageManager.PackageInfo> GetAllPackages()
-        {
-            return new List<UnityEditor.PackageManager.PackageInfo>();
-        }
-
-        public static void RefreshAllPackageCache() { }
-
-        public static UnityEditor.PackageManager.PackageInfo GetPackageInfo(string packageName)
-        {
-            return null;
-        }
+        // Runtime 版本不提供 GetAllPackages、GetPackageInfo 等 API
+        // 這些功能僅在 Editor 中可用
 #endif
     }
 }
