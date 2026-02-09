@@ -3,7 +3,7 @@
   "version": "0.1.4",
   "displayName": "MonoFSM Utility",
   "description": "Utility package for MonoFSM and dependency installer",
-  "unity": "6001.1",
+  "unity": "2022.3",
   "dependencies": {
     "com.unity.nuget.newtonsoft-json": "3.2.1"
   },
