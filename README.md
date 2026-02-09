@@ -35,7 +35,7 @@ MonoFSM Core Utility is a comprehensive Unity editor tool that provides advanced
 1. Open Unity Package Manager (`Window > Package Manager`)
 2. Click the `+` button in the top-left corner
 3. Select `Add package from git URL...`
-4. Enter the Git URL: `https://github.com/RED-CANDLE-GAMES-CO-LTD/MonoFSM_Core_Utility.git`
+4. Enter the Git URL: `https://github.com/RED-CANDLE-GAMES-CO-LTD/MonoFSM_Core_Utility.git?path=/Packages/com.monofsm.utility`
 5. Click `Add` and Unity will automatically download and install the package
 
 **For Contributors: Using Git Submodule**
@@ -53,7 +53,7 @@ If you want to contribute to this package or need to modify the source code:
 
 **Alternative: Manual Installation**
 1. Clone or download this repository
-2. Place the `MonoFSM_Core_Utility` folder in your Unity project's `Packages` folder
+2. Copy the `Packages/com.monofsm.utility` folder into your Unity project's `Packages` folder
 3. Unity will automatically recognize and import the package
 
 ### Usage
@@ -77,7 +77,7 @@ The installer provides two main tabs:
 
 ### Package Information
 - **Name**: com.monofsm.utility
-- **Version**: 0.1.0
+- **Version**: 0.1.4
 - **Author**: Red Candle Games
 - **Unity Version**: 2022.3+
 
@@ -113,7 +113,7 @@ MonoFSM Core Utility 是一個全面的 Unity 編輯器工具，提供進階的�
 1. 開啟 Unity 套件管理器（`視窗 > 套件管理器`）
 2. 點擊左上角的 `+` 按鈕
 3. 選擇 `從 git URL 新增套件...`
-4. 輸入 Git URL：`https://github.com/RED-CANDLE-GAMES-CO-LTD/MonoFSM_Core_Utility.git`
+4. 輸入 Git URL：`https://github.com/RED-CANDLE-GAMES-CO-LTD/MonoFSM_Core_Utility.git?path=/Packages/com.monofsm.utility`
 5. 點擊 `新增`，Unity 將自動下載並安裝該套件
 
 **對於貢獻者：使用 Git 子模組**
@@ -131,7 +131,7 @@ MonoFSM Core Utility 是一個全面的 Unity 編輯器工具，提供進階的�
 
 **替代方案：手動安裝**
 1. 複製或下載此存儲庫
-2. 將 `MonoFSM_Core_Utility` 資料夾放置在您的 Unity 專案的 `Packages` 資料夾中
+2. 將 `Packages/com.monofsm.utility` 資料夾放置在您的 Unity 專案的 `Packages` 資料夾中
 3. Unity 會自動識別並匯入套件
 
 ### 使用方法
@@ -155,7 +155,7 @@ MonoFSM Core Utility 是一個全面的 Unity 編輯器工具，提供進階的�
 
 ### 套件資訊
 - **名稱**: com.monofsm.utility
-- **版本**: 0.1.0
+- **版本**: 0.1.4
 - **作者**: Red Candle Games
 - **Unity 版本**: 2022.3+
 
