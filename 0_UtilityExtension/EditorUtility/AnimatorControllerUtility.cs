@@ -36,14 +36,29 @@ namespace MonoFSM.Core
             // var newAssetPath = Path.Combine(folderPath, animator.gameObject.name + ".overrideController");
             if (animator.runtimeAnimatorController != null)
             {
-                var originalAssetPath = AssetDatabase.GetAssetPath(animator.runtimeAnimatorController);
-                var originalAssetName = Path.GetFileName(originalAssetPath);
-                var newAssetPath = Path.Combine(folderPath, "Copied " + originalAssetName);
-                Debug.Log(newAssetPath);
-                AssetDatabase.CopyAsset(originalAssetPath, newAssetPath);
-                var newOverrideController = AssetDatabase.LoadAssetAtPath<AnimatorOverrideController>(newAssetPath);
-                CopyAllOverrideClipsToControllerFolder(newOverrideController);
-                animator.runtimeAnimatorController = newOverrideController;
+                if (animator.runtimeAnimatorController is AnimatorOverrideController)
+                {
+                    // 已經是 OverrideController，複製一份
+                    var originalAssetPath = AssetDatabase.GetAssetPath(animator.runtimeAnimatorController);
+                    var originalAssetName = Path.GetFileName(originalAssetPath);
+                    var newAssetPath = Path.Combine(folderPath, "Copied " + originalAssetName);
+                    Debug.Log(newAssetPath);
+                    AssetDatabase.CopyAsset(originalAssetPath, newAssetPath);
+                    var newOverrideController = AssetDatabase.LoadAssetAtPath<AnimatorOverrideController>(newAssetPath);
+                    CopyAllOverrideClipsToControllerFolder(newOverrideController);
+                    animator.runtimeAnimatorController = newOverrideController;
+                }
+                else
+                {
+                    // 是普通 AnimatorController，建立新的 OverrideController 指向它
+                    var sourceController = animator.runtimeAnimatorController as AnimatorController;
+                    var newAssetPath = Path.Combine(folderPath, animator.gameObject.name + ".overrideController");
+                    Debug.Log($"Creating new OverrideController at: {newAssetPath}");
+                    var newOverrideController = new AnimatorOverrideController(sourceController);
+                    AssetDatabase.CreateAsset(newOverrideController, newAssetPath);
+                    animator.runtimeAnimatorController = AssetDatabase.LoadAssetAtPath<AnimatorOverrideController>(newAssetPath);
+                }
+
                 animator.SetDirty();
                 AssetDatabase.SaveAssets();
             }
