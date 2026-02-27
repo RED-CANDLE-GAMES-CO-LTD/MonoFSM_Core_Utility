@@ -85,7 +85,7 @@ public static class EditorMonoNodeExtension
             }
             // We also want to include the given type if it's not an abstract or a generic type.
 
-            Debug.Log("Add type " + baseType.Name + " from itself");
+            // Debug.Log("Add type " + baseType.Name + " from itself");
         }
 
         var types = TypeCache.GetTypesDerivedFrom(baseType);
@@ -109,7 +109,7 @@ public static class EditorMonoNodeExtension
                 if (type.IsClass && !type.IsAbstract && !type.IsGenericType)
                 {
                     typeList.Add(type);
-                    Debug.Log("Add type " + type.Name + " from " + baseType.Name);
+                    // Debug.Log("Add type " + type.Name + " from " + baseType.Name);
                 }
             }
         }
