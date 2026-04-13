@@ -48,6 +48,24 @@ using UnityEditor;
 // }
 public static class MonoNodeExtension
 {
+    public static bool IsNullOrEmpty(this string str)
+    {
+        return string.IsNullOrEmpty(str);
+    }
+
+    public static bool IsNullOrWhitespace(this string str)
+    {
+        if (!string.IsNullOrEmpty(str))
+        {
+            for (int index = 0; index < str.Length; ++index)
+            {
+                if (!char.IsWhiteSpace(str[index]))
+                    return false;
+            }
+        }
+
+        return true;
+    }
     /// <summary>
     /// 找到所有的parent下的sibling
     /// </summary>
