@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -40,8 +41,9 @@ namespace MonoFSM.Core
                 {
                     // 已經是 OverrideController，複製一份
                     var originalAssetPath = AssetDatabase.GetAssetPath(animator.runtimeAnimatorController);
-                    var originalAssetName = Path.GetFileName(originalAssetPath);
-                    var newAssetPath = Path.Combine(folderPath, "Copied " + originalAssetName);
+                    // var originalAssetName = Path.GetFileName(originalAssetPath);
+                    var newAssetPath = Path.Combine(folderPath, animator.name + ".overrideController");
+                    newAssetPath = AssetDatabase.GenerateUniqueAssetPath(newAssetPath); //避免覆蓋原本的 controller
                     Debug.Log(newAssetPath);
                     AssetDatabase.CopyAsset(originalAssetPath, newAssetPath);
                     var newOverrideController = AssetDatabase.LoadAssetAtPath<AnimatorOverrideController>(newAssetPath);
@@ -69,6 +71,9 @@ namespace MonoFSM.Core
         private static void CopyAllOverrideClipsToControllerFolder(AnimatorOverrideController overrideController)
         {
             var folderPath = Path.GetDirectoryName(AssetDatabase.GetAssetPath(overrideController));
+            //controller 名也去掉 [xxx] 括弧標註並清掉多餘空白
+            var controllerName = Regex.Replace(overrideController.name, @"\[[^\]]*\]", "");
+            controllerName = Regex.Replace(controllerName, @"\s+", " ").Trim();
             var overrides = new List<KeyValuePair<AnimationClip, AnimationClip>>(overrideController.overridesCount);
             overrideController.GetOverrides(overrides);
             for (var i = 0; i < overrides.Count; ++i)
@@ -76,15 +81,25 @@ namespace MonoFSM.Core
                 if (!overrides[i].Value) continue; //有override的clip
 
                 var clipPath = AssetDatabase.GetAssetPath(overrides[i].Value);
-                var clipFolder = Path.GetDirectoryName(clipPath);
-                if (folderPath != clipFolder)
-                {
-                    AssetDatabase.CopyAsset(clipPath, Path.Combine(folderPath, Path.GetFileName(clipPath)));
-                    var newClip =
-                        AssetDatabase.LoadAssetAtPath<AnimationClip>(Path.Combine(folderPath,
-                            Path.GetFileName(clipPath)));
-                    overrideController[overrides[i].Key] = newClip;
-                }
+
+                //用 base clip 名(來源 controller 的 Key，穩定不含舊後綴) + controller 名組新檔名，
+                //等於把舊 controller 後綴整個換成新的
+                var baseName = overrides[i].Key != null ? overrides[i].Key.name : overrides[i].Value.name;
+                //去掉所有 [xxx] 括弧標註(含 "[Base]" 等)，並清掉多餘空白
+                baseName = Regex.Replace(baseName, @"\[[^\]]*\]", "");
+                baseName = Regex.Replace(baseName, @"\s+", " ").Trim();
+
+                var extension = Path.GetExtension(clipPath);
+                var targetPath = Path.Combine(folderPath, $"{baseName} {controllerName}{extension}");
+
+                if (clipPath == targetPath) continue; //已經是目標名稱與位置
+
+                if (File.Exists(targetPath))
+                    targetPath = AssetDatabase.GenerateUniqueAssetPath(targetPath);
+
+                AssetDatabase.CopyAsset(clipPath, targetPath);
+                var newClip = AssetDatabase.LoadAssetAtPath<AnimationClip>(targetPath);
+                overrideController[overrides[i].Key] = newClip;
             }
         }
 
